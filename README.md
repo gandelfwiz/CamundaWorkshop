@@ -112,3 +112,40 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+### **Step 3: add a gateway. Create a collapsed subprocess and an extended one**
+
+&nbsp;
+
+1. Change the process as follow:
+
+![Step 3 gateway: Add gateway and 2 subprocesses](images/authorization_step3_process.png)
+
+2. Selecting the collapsed subprocess you can enter in the subprocess. Create the following subprocess:
+
+![Step 3 collapsed subprocess: definition of the subprocess](images/authorization_step3_biometric_subprocess.png)
+
+3. Let's add configuration for the gateway. The arrow `biometric` will have a condition configured as follows:
+
+	*Type*: expression
+	*Condition Expression*: `${authorizationType == "BIOMETRIC"}`
+	
+	The arrow password will be configured with this expression: `${authorizationType == "PASSWORD"}`
+
+	Note that the value is the ID of the enum and not the name
+
+4. To check that the gateway works correctly configure in subprocess the script task as follows:
+
+```groovy
+println "Biometric authorization push another device"
+```
+
+5. Now deploy the process and start it from tasklist.
+
+6. You should see the task `Select the authorization type`
+
+7. Select `Password` and a new task `Ask for password` appear in task list
+
+8. Select `Biometric` and in console you might read `Biometric authorization push another device`
+
+&nbsp;
+
