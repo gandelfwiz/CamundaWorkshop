@@ -70,3 +70,45 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+### **Step 2: create a variable and pass from one task to another**
+
+&nbsp;
+
+1. Add to the user task the following configuration:
+
+![Step 2 variable: Add a variable to the process](images/authorization_add_variable.png)
+
+2. Add a script task to receive and print the variable chosen by user:
+
+![Step 2 script: A simple script task that prints the variable of the previous one](images/authorization_step2_process.png)
+
+3. Configure the script task as follows:
+
+	*Format*: groovy \
+	*Type*: Inline script \
+	*Script*: 
+	```groovy
+	println "The authorization type chosen is " + autorizationType
+	```
+
+	Pay attention that *autorizationType* is the wrong name of the variable set in the previous user task.
+
+4. Deploy it and start the process
+
+5. Open the task and select a value.
+
+6. Complete the task: you will see an error. In console you can see a java stack exception.
+
+7. You can delete the task uncompletable by rest api.
+
+8. Correct the *groovy* script and update the name of variable as follows:
+
+	```groovy
+	println "The authorization type chosen is " + authorizationType
+	```
+9. Deploy again the process and start it
+
+10. Complete the task choosing Biometric value: this time in console you can read: `The authorization type chosen is BIOMETRIC`
+
+&nbsp;
+
