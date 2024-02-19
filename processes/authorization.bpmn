@@ -25,7 +25,7 @@
     <bpmn:scriptTask id="PrintAuthorizationType" name="Print authorization type chosen" scriptFormat="groovy">
       <bpmn:incoming>Flow_02hv2i9</bpmn:incoming>
       <bpmn:outgoing>Flow_0ulkxev</bpmn:outgoing>
-      <bpmn:script>println "The authorization type chosen is " + autorizationType</bpmn:script>
+      <bpmn:script>println "The authorization type chosen is " + authorizationType</bpmn:script>
     </bpmn:scriptTask>
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
@@ -33,11 +33,11 @@
       <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
         <dc:Bounds x="179" y="99" width="36" height="36" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Event_0nbrcot_di" bpmnElement="Event_0nbrcot">
-        <dc:Bounds x="612" y="99" width="36" height="36" />
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Activity_1392rb0_di" bpmnElement="SelectAuthorizationType">
         <dc:Bounds x="270" y="77" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0nbrcot_di" bpmnElement="Event_0nbrcot">
+        <dc:Bounds x="612" y="99" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Activity_063ija4_di" bpmnElement="PrintAuthorizationType">
         <dc:Bounds x="440" y="77" width="100" height="80" />
