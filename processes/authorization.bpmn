@@ -122,23 +122,67 @@
       <bpmn:outgoing>Flow_0tnjkq1</bpmn:outgoing>
       <bpmn:errorEventDefinition id="ErrorEventDefinition_04myax9" errorRef="Error_0ytrhs7" camunda:errorCodeVariable="passwordError" camunda:errorMessageVariable="passwordMessage" />
     </bpmn:boundaryEvent>
-    <bpmn:sequenceFlow id="Flow_0tnjkq1" sourceRef="CatchPasswordLockedError" targetRef="PasswordLocked" />
-    <bpmn:endEvent id="Event_1e9dov3">
-      <bpmn:incoming>Flow_0k390fg</bpmn:incoming>
-    </bpmn:endEvent>
-    <bpmn:sequenceFlow id="Flow_0k390fg" sourceRef="PasswordLocked" targetRef="Event_1e9dov3" />
-    <bpmn:scriptTask id="PasswordLocked" name="Print password locked" scriptFormat="groovy">
-      <bpmn:incoming>Flow_0tnjkq1</bpmn:incoming>
-      <bpmn:outgoing>Flow_0k390fg</bpmn:outgoing>
-      <bpmn:script>println "Password should be blocked"</bpmn:script>
-    </bpmn:scriptTask>
+    <bpmn:sequenceFlow id="Flow_0tnjkq1" sourceRef="CatchPasswordLockedError" targetRef="WarnCustomer" />
     <bpmn:sequenceFlow id="Flow_1anlvi4" sourceRef="LoopActivity" targetRef="Event_1pmuidv" />
     <bpmn:endEvent id="Event_1pmuidv">
       <bpmn:incoming>Flow_1anlvi4</bpmn:incoming>
     </bpmn:endEvent>
+    <bpmn:endEvent id="WarnCustomer" name="Warn the customer">
+      <bpmn:incoming>Flow_0tnjkq1</bpmn:incoming>
+      <bpmn:escalationEventDefinition id="EscalationEventDefinition_07eqobw" escalationRef="Escalation_11qamde" />
+    </bpmn:endEvent>
+    <bpmn:subProcess id="Activity_0vkdfs7" triggeredByEvent="true">
+      <bpmn:startEvent id="EscalateCatch" name="Warn the customer">
+        <bpmn:outgoing>Flow_006xm1j</bpmn:outgoing>
+        <bpmn:escalationEventDefinition id="EscalationEventDefinition_0l9hx2d" escalationRef="Escalation_11qamde" camunda:escalationCodeVariable="escalateCode" />
+      </bpmn:startEvent>
+      <bpmn:sequenceFlow id="Flow_006xm1j" sourceRef="EscalateCatch" targetRef="SendSmsTask" />
+      <bpmn:endEvent id="Event_13505ws">
+        <bpmn:incoming>Flow_0s7zy1p</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_0s7zy1p" sourceRef="printResultSendSms" targetRef="Event_13505ws" />
+      <bpmn:serviceTask id="SendSmsTask" name="Send Sms">
+        <bpmn:extensionElements>
+          <camunda:connector>
+            <camunda:inputOutput>
+              <camunda:inputParameter name="headers">
+                <camunda:map>
+                  <camunda:entry key="Content-Type">application/json</camunda:entry>
+                  <camunda:entry key="Accept">application/json</camunda:entry>
+                </camunda:map>
+              </camunda:inputParameter>
+              <camunda:inputParameter name="method">POST</camunda:inputParameter>
+              <camunda:inputParameter name="url">http://localhost:8900/external-service/sms</camunda:inputParameter>
+              <camunda:inputParameter name="payload">
+                <camunda:script scriptFormat="javascript">var payload = {
+    "phoneNumber": "+39111223344",
+    "message": "Send sms from Camunda Process for reason code " + execution.getVariable("escalateCode")
+}
+
+JSON.stringify(payload);</camunda:script>
+              </camunda:inputParameter>
+              <camunda:outputParameter name="response">${S(response)}</camunda:outputParameter>
+            </camunda:inputOutput>
+            <camunda:connectorId>http-connector</camunda:connectorId>
+          </camunda:connector>
+          <camunda:inputOutput>
+            <camunda:outputParameter name="resultSms">${response}</camunda:outputParameter>
+          </camunda:inputOutput>
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_006xm1j</bpmn:incoming>
+        <bpmn:outgoing>Flow_0ekltsu</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:sequenceFlow id="Flow_0ekltsu" sourceRef="SendSmsTask" targetRef="printResultSendSms" />
+      <bpmn:scriptTask id="printResultSendSms" name="Print result" scriptFormat="javascript">
+        <bpmn:incoming>Flow_0ekltsu</bpmn:incoming>
+        <bpmn:outgoing>Flow_0s7zy1p</bpmn:outgoing>
+        <bpmn:script>java.lang.System.out.println("Result of sending: " + execution.getVariable("resultSms"));</bpmn:script>
+      </bpmn:scriptTask>
+    </bpmn:subProcess>
   </bpmn:process>
   <bpmn:message id="Message_0dfqafp" name="PasswordIsValid" />
   <bpmn:error id="Error_0ytrhs7" name="PasswordLocked" errorCode="PasswordLocked" camunda:errorMessage="Password was locked!" />
+  <bpmn:escalation id="Escalation_11qamde" name="WarnCustomer" escalationCode="warn" />
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="AuthorizationProcess">
       <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
@@ -155,6 +199,12 @@
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_0mx8n6w_di" bpmnElement="Gateway_0mx8n6w" isMarkerVisible="true">
         <dc:Bounds x="995" y="192" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_08x319r_di" bpmnElement="WarnCustomer">
+        <dc:Bounds x="812" y="682" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="807" y="725" width="47" height="27" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Activity_112o0n7_di" bpmnElement="subProcessOtherDevice">
         <dc:Bounds x="550" y="80" width="100" height="80" />
@@ -218,16 +268,40 @@
         <di:waypoint x="740" y="540" />
         <di:waypoint x="718" y="540" />
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNShape id="Event_1e9dov3_di" bpmnElement="Event_1e9dov3">
-        <dc:Bounds x="972" y="682" width="36" height="36" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_0y8pv16_di" bpmnElement="PasswordLocked">
-        <dc:Bounds x="820" y="660" width="100" height="80" />
-        <bpmndi:BPMNLabel />
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_1pmuidv_di" bpmnElement="Event_1pmuidv">
         <dc:Bounds x="972" y="457" width="36" height="36" />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0ngdf7c_di" bpmnElement="Activity_0vkdfs7" isExpanded="true">
+        <dc:Bounds x="425" y="770" width="610" height="190" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_12fl1k8_di" bpmnElement="EscalateCatch">
+        <dc:Bounds x="465" y="852" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="463" y="895" width="47" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1jwqv64_di" bpmnElement="SendSmsTask">
+        <dc:Bounds x="560" y="830" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_13505ws_di" bpmnElement="Event_13505ws">
+        <dc:Bounds x="912" y="852" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1yvmbq8_di" bpmnElement="printResultSendSms">
+        <dc:Bounds x="730" y="830" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_006xm1j_di" bpmnElement="Flow_006xm1j">
+        <di:waypoint x="501" y="870" />
+        <di:waypoint x="560" y="870" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0ekltsu_di" bpmnElement="Flow_0ekltsu">
+        <di:waypoint x="660" y="870" />
+        <di:waypoint x="730" y="870" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0s7zy1p_di" bpmnElement="Flow_0s7zy1p">
+        <di:waypoint x="830" y="870" />
+        <di:waypoint x="912" y="870" />
+      </bpmndi:BPMNEdge>
       <bpmndi:BPMNShape id="Event_1gg8rd7_di" bpmnElement="CatchPasswordLockedError">
         <dc:Bounds x="732" y="592" width="36" height="36" />
         <bpmndi:BPMNLabel>
@@ -281,11 +355,7 @@
       <bpmndi:BPMNEdge id="Flow_0tnjkq1_di" bpmnElement="Flow_0tnjkq1">
         <di:waypoint x="750" y="628" />
         <di:waypoint x="750" y="700" />
-        <di:waypoint x="820" y="700" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_0k390fg_di" bpmnElement="Flow_0k390fg">
-        <di:waypoint x="920" y="700" />
-        <di:waypoint x="972" y="700" />
+        <di:waypoint x="812" y="700" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_1anlvi4_di" bpmnElement="Flow_1anlvi4">
         <di:waypoint x="940" y="475" />
