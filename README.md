@@ -350,8 +350,57 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+### **Step 6: Resilience and Retry**
+&nbsp;
+#### **I. BPMN based**
+
+1. It is possible to implements in BPMN the retry. Change the diagram as follows:
+
+	![Step 6 resilience and retry](images/authorization_step06_retry_bpmn.png)
+
+2. Set up for `Send SMS` task an execution listener for the event type `end` as javascript using the following source code:
+
+	```javascript
+	if (statusCode>299 && execution.getVariable("retryCounter")<3) {
+		execution.setVariable("retryCounter", execution.getVariable("retryCounter")+1);
+		throw new org.camunda.bpm.engine.delegate.BpmnError("restError");
+	}
+	```
+
+3. Then add an execution listener also to the Escalate catch event to initialize the counter. Again add the listener with type `end` as javascript using the following source code:
+
+	```javascript
+	execution.setVariable("retryCounter",0);
+	```
+
+4. Set the timer duration to `PT5S` for 5 seconds
+
+5. Set up the event error boundary catch for an error with the following configuration:
+	- Name: `RestError`
+	- Code: `restError` - Pay attention that this is the error raised by script
+
+6. Now deploy the process and try it. Run the external service to send sms you created in previous step. Then Start the process and put the wrong password (different than 111111) three times. The process will be completed and the message you can see in console is: 
+	```
+	Tentative #0
+	Result of sending: {"sendingResult":true,"errorMessage":null}
+	```
+	The call was executed successfully so the system completed the process.
+
+7. Now change in task `Send SMS` the script of payload. Set the `"phoneNumber"` variable equal to null in json:
+
+	```json
+	{
+		"phoneNumber": null,
+		"message": "Send sms from Camunda Process for reason code " + execution.getVariable("escalateCode")
+	}
+	```
+
+	and deploy the process again. Start the process and put 3 times the wrong password. The external service will return a statusCode `400 - Bad request` and you can see in *Cockpit* application the process that is running the timer. If you look the console of external service you can see that every 5 seconds it receives a call. After 3 tentatives the Camunda console will print:
+
+	```
+	Tentative #0
+	Result of sending: {"sendingResult":false,"errorMessage":"Phone number is required"}
+	```
 
 
-
-
-
+&nbsp;

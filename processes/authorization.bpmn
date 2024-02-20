@@ -133,10 +133,15 @@
     </bpmn:endEvent>
     <bpmn:subProcess id="Activity_0vkdfs7" triggeredByEvent="true">
       <bpmn:startEvent id="EscalateCatch" name="Warn the customer">
+        <bpmn:extensionElements>
+          <camunda:executionListener event="end">
+            <camunda:script scriptFormat="javascript">execution.setVariable("retryCounter",0);</camunda:script>
+          </camunda:executionListener>
+        </bpmn:extensionElements>
         <bpmn:outgoing>Flow_006xm1j</bpmn:outgoing>
         <bpmn:escalationEventDefinition id="EscalationEventDefinition_0l9hx2d" escalationRef="Escalation_11qamde" camunda:escalationCodeVariable="escalateCode" />
       </bpmn:startEvent>
-      <bpmn:sequenceFlow id="Flow_006xm1j" sourceRef="EscalateCatch" targetRef="SendSmsTask" />
+      <bpmn:sequenceFlow id="Flow_006xm1j" sourceRef="EscalateCatch" targetRef="JoinRetry" />
       <bpmn:endEvent id="Event_13505ws">
         <bpmn:incoming>Flow_0s7zy1p</bpmn:incoming>
       </bpmn:endEvent>
@@ -162,14 +167,21 @@
 JSON.stringify(payload);</camunda:script>
               </camunda:inputParameter>
               <camunda:outputParameter name="response">${S(response)}</camunda:outputParameter>
+              <camunda:outputParameter name="statusCode">${statusCode}</camunda:outputParameter>
             </camunda:inputOutput>
             <camunda:connectorId>http-connector</camunda:connectorId>
           </camunda:connector>
           <camunda:inputOutput>
             <camunda:outputParameter name="resultSms">${response}</camunda:outputParameter>
           </camunda:inputOutput>
+          <camunda:executionListener event="end">
+            <camunda:script scriptFormat="javascript">if (statusCode&gt;299 &amp;&amp; execution.getVariable("retryCounter")&lt;3) {
+execution.setVariable("retryCounter", execution.getVariable("retryCounter")+1);
+throw new org.camunda.bpm.engine.delegate.BpmnError("restError");
+}</camunda:script>
+          </camunda:executionListener>
         </bpmn:extensionElements>
-        <bpmn:incoming>Flow_006xm1j</bpmn:incoming>
+        <bpmn:incoming>Flow_07xv1yz</bpmn:incoming>
         <bpmn:outgoing>Flow_0ekltsu</bpmn:outgoing>
       </bpmn:serviceTask>
       <bpmn:sequenceFlow id="Flow_0ekltsu" sourceRef="SendSmsTask" targetRef="printResultSendSms" />
@@ -178,11 +190,31 @@ JSON.stringify(payload);</camunda:script>
         <bpmn:outgoing>Flow_0s7zy1p</bpmn:outgoing>
         <bpmn:script>java.lang.System.out.println("Result of sending: " + execution.getVariable("resultSms"));</bpmn:script>
       </bpmn:scriptTask>
+      <bpmn:exclusiveGateway id="JoinRetry">
+        <bpmn:incoming>Flow_006xm1j</bpmn:incoming>
+        <bpmn:incoming>retryArrow</bpmn:incoming>
+        <bpmn:outgoing>Flow_07xv1yz</bpmn:outgoing>
+      </bpmn:exclusiveGateway>
+      <bpmn:sequenceFlow id="Flow_07xv1yz" sourceRef="JoinRetry" targetRef="SendSmsTask" />
+      <bpmn:sequenceFlow id="Flow_0mkwnwt" sourceRef="RestErrorCatchingEvent" targetRef="FiveSecondsTimerEvent" />
+      <bpmn:intermediateCatchEvent id="FiveSecondsTimerEvent" name="after 5 seconds">
+        <bpmn:incoming>Flow_0mkwnwt</bpmn:incoming>
+        <bpmn:outgoing>retryArrow</bpmn:outgoing>
+        <bpmn:timerEventDefinition id="TimerEventDefinition_13tox35">
+          <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT5S</bpmn:timeDuration>
+        </bpmn:timerEventDefinition>
+      </bpmn:intermediateCatchEvent>
+      <bpmn:sequenceFlow id="retryArrow" name="retry" sourceRef="FiveSecondsTimerEvent" targetRef="JoinRetry" />
+      <bpmn:boundaryEvent id="RestErrorCatchingEvent" attachedToRef="SendSmsTask">
+        <bpmn:outgoing>Flow_0mkwnwt</bpmn:outgoing>
+        <bpmn:errorEventDefinition id="ErrorEventDefinition_0iat405" errorRef="Error_184ldi9" camunda:errorCodeVariable="httpStatusCode" camunda:errorMessageVariable="httpStatusMessage" />
+      </bpmn:boundaryEvent>
     </bpmn:subProcess>
   </bpmn:process>
   <bpmn:message id="Message_0dfqafp" name="PasswordIsValid" />
   <bpmn:error id="Error_0ytrhs7" name="PasswordLocked" errorCode="PasswordLocked" camunda:errorMessage="Password was locked!" />
   <bpmn:escalation id="Escalation_11qamde" name="WarnCustomer" escalationCode="warn" />
+  <bpmn:error id="Error_184ldi9" name="RestError" errorCode="restError" camunda:errorMessage="${response.prop(&#34;errorMessage&#34;)}" />
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="AuthorizationProcess">
       <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
@@ -199,12 +231,6 @@ JSON.stringify(payload);</camunda:script>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_0mx8n6w_di" bpmnElement="Gateway_0mx8n6w" isMarkerVisible="true">
         <dc:Bounds x="995" y="192" width="50" height="50" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Event_08x319r_di" bpmnElement="WarnCustomer">
-        <dc:Bounds x="812" y="682" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="807" y="725" width="47" height="27" />
-        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Activity_112o0n7_di" bpmnElement="subProcessOtherDevice">
         <dc:Bounds x="550" y="80" width="100" height="80" />
@@ -271,36 +297,70 @@ JSON.stringify(payload);</camunda:script>
       <bpmndi:BPMNShape id="Event_1pmuidv_di" bpmnElement="Event_1pmuidv">
         <dc:Bounds x="972" y="457" width="36" height="36" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_0ngdf7c_di" bpmnElement="Activity_0vkdfs7" isExpanded="true">
-        <dc:Bounds x="425" y="770" width="610" height="190" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Event_12fl1k8_di" bpmnElement="EscalateCatch">
-        <dc:Bounds x="465" y="852" width="36" height="36" />
+      <bpmndi:BPMNShape id="Event_08x319r_di" bpmnElement="WarnCustomer">
+        <dc:Bounds x="812" y="682" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="463" y="895" width="47" height="27" />
+          <dc:Bounds x="807" y="725" width="47" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_1jwqv64_di" bpmnElement="SendSmsTask">
-        <dc:Bounds x="560" y="830" width="100" height="80" />
+      <bpmndi:BPMNShape id="Activity_0ngdf7c_di" bpmnElement="Activity_0vkdfs7" isExpanded="true">
+        <dc:Bounds x="330" y="770" width="705" height="300" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_12fl1k8_di" bpmnElement="EscalateCatch">
+        <dc:Bounds x="382" y="852" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="380" y="895" width="47" height="27" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_13505ws_di" bpmnElement="Event_13505ws">
         <dc:Bounds x="912" y="852" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1jwqv64_di" bpmnElement="SendSmsTask">
+        <dc:Bounds x="560" y="830" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Activity_1yvmbq8_di" bpmnElement="printResultSendSms">
         <dc:Bounds x="730" y="830" width="100" height="80" />
         <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_00gzppg_di" bpmnElement="JoinRetry" isMarkerVisible="true">
+        <dc:Bounds x="465" y="845" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1kl15nx_di" bpmnElement="FiveSecondsTimerEvent">
+        <dc:Bounds x="612" y="992" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="593" y="1035" width="76" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1qri39p_di" bpmnElement="RestErrorCatchingEvent">
+        <dc:Bounds x="612" y="892" width="36" height="36" />
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_006xm1j_di" bpmnElement="Flow_006xm1j">
-        <di:waypoint x="501" y="870" />
-        <di:waypoint x="560" y="870" />
+        <di:waypoint x="418" y="870" />
+        <di:waypoint x="465" y="870" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0s7zy1p_di" bpmnElement="Flow_0s7zy1p">
+        <di:waypoint x="830" y="870" />
+        <di:waypoint x="912" y="870" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_0ekltsu_di" bpmnElement="Flow_0ekltsu">
         <di:waypoint x="660" y="870" />
         <di:waypoint x="730" y="870" />
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_0s7zy1p_di" bpmnElement="Flow_0s7zy1p">
-        <di:waypoint x="830" y="870" />
-        <di:waypoint x="912" y="870" />
+      <bpmndi:BPMNEdge id="Flow_07xv1yz_di" bpmnElement="Flow_07xv1yz">
+        <di:waypoint x="515" y="870" />
+        <di:waypoint x="560" y="870" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0mkwnwt_di" bpmnElement="Flow_0mkwnwt">
+        <di:waypoint x="630" y="928" />
+        <di:waypoint x="630" y="992" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0xre53b_di" bpmnElement="retryArrow">
+        <di:waypoint x="612" y="1010" />
+        <di:waypoint x="490" y="1010" />
+        <di:waypoint x="490" y="895" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="540" y="992" width="23" height="14" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNShape id="Event_1gg8rd7_di" bpmnElement="CatchPasswordLockedError">
         <dc:Bounds x="732" y="592" width="36" height="36" />
