@@ -350,8 +350,86 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+### **Step 6: Resilience and Retry**
+&nbsp;
+#### **I. BPMN based**
+
+1. It is possible to implement in BPMN the retry. Change the diagram as follows:
+
+	![Step 6 resilience and retry](images/authorization_step06_retry_bpmn.png)
+
+2. Set up for `Send SMS` task an execution listener for the event type `end` as javascript using the following source code:
+
+	```javascript
+	if (statusCode>299 && execution.getVariable("retryCounter")<3) {
+		execution.setVariable("retryCounter", execution.getVariable("retryCounter")+1);
+		throw new org.camunda.bpm.engine.delegate.BpmnError("restError");
+	}
+	```
+
+3. Then add an execution listener also to the Escalate catch event to initialize the counter. Again add the listener with type `end` as javascript using the following source code:
+
+	```javascript
+	execution.setVariable("retryCounter",0);
+	```
+
+4. Set the timer duration to `PT5S` for 5 seconds
+
+5. Set up the event error boundary catch for an error with the following configuration:
+	- Name: `RestError`
+	- Code: `restError` - Pay attention that this is the error raised by script
+
+6. Now deploy the process and try it. Run the external service to send sms you created in previous step. Then Start the process and put the wrong password (different than 111111) three times. The process will be completed and the message you can see in console is: 
+	```
+	Tentative #0
+	Result of sending: {"sendingResult":true,"errorMessage":null}
+	```
+	The call was executed successfully so the system completed the process.
+
+7. Now change in task `Send SMS` the script of payload. Set the `"phoneNumber"` Json property equal to null:
+
+	```json
+	{
+		"phoneNumber": null,
+		"message": "Send sms from Camunda Process for reason code " + execution.getVariable("escalateCode")
+	}
+	```
+
+	and deploy the process again. Start the process and put 3 times the wrong password. The external service will return a statusCode `400 - Bad request` and you can see in *Cockpit* application the process that is running the timer. If you look the console of external service you can see that every 5 seconds it receives a call. After 3 tentatives the Camunda console will print:
+
+	```
+	Tentative #0
+	Result of sending: {"sendingResult":false,"errorMessage":"Phone number is required"}
+	```
+
+&nbsp;
+#### **II. Camunda engine based**
 
 
+>**NOTE:** *It is possible to implement the retry using the automatic retry of asynchronous task of Camunda. Make explicit in BPMN the retry behavior can bring advantages for clarity, but at the same time could bring some disadvantages. Consider that desribe a technical retry is not business oriented and that the diagram increase its complexity in reading. In addition to this there is a limit in Camunda 7 for which if a service is unavailable the task exit before to evaluate executionListener and a manual incident is opened automatically, so in those cases the BPMN retry wouldn't be performed. 
+For this reason the Camunda Engine approach is preferrable. If you Start back from the diagram of Step 5 you have just few steps to implement the retry.*
 
+1.  Set up the asynchronous continuation of `Send SMS` task. Activate the checkbox under *Asynchronous continuations* `Before` and `Exclusive` and put the following *Job execution - Retry time cycle* expression: `R3/PT5S`. This configuration makes starting a new thread to execute the call and if it fails it retry automatically. In this way even if the service is unavailable the retry will be executed.
 
+2. Add the *Connector output* variable `statusCode` set with the expression `${statusCode}`. 
 
+3. Add the *Execution listeners* script for *end event* as a javascript with the following source code to force the error when the response is a logical failure:
+
+	```javascript
+	if (statusCode>299) {
+    	throw new org.apache.http.HttpException("Error sending sms : " + response); 
+	}
+	```
+
+4. Finally to test it set the `"phoneNumber"` Json property in task `Send SMS` to null in the script of payload:
+
+	```json
+	{
+		"phoneNumber": null,
+		"message": "Send sms from Camunda Process for reason code " + execution.getVariable("escalateCode")
+	}
+	```
+
+5. Deploy the process and test it. When you will put for 3 times the wrong password the system will run an automatic retry.
+
+&nbsp;
