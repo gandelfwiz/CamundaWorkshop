@@ -30,7 +30,7 @@
     <bpmn:sequenceFlow id="biometricFlow" name="biometric" sourceRef="Gateway_0px812s" targetRef="subProcessOtherDevice">
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${authorizationType == "BIOMETRIC"}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
-    <bpmn:sequenceFlow id="passwordFlow" name="password" sourceRef="Gateway_0px812s" targetRef="Activity_0m80htr">
+    <bpmn:sequenceFlow id="passwordFlow" name="password" sourceRef="Gateway_0px812s" targetRef="LoopActivity">
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${authorizationType == "PASSWORD"}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:exclusiveGateway id="Gateway_0mx8n6w">
@@ -38,7 +38,7 @@
       <bpmn:incoming>Flow_0bw2326</bpmn:incoming>
       <bpmn:outgoing>Flow_1b0qixs</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-    <bpmn:sequenceFlow id="Flow_1cf1ukx" sourceRef="Activity_0m80htr" targetRef="Gateway_0mx8n6w" />
+    <bpmn:sequenceFlow id="Flow_1cf1ukx" sourceRef="CatchPasswordIsValid" targetRef="Gateway_0mx8n6w" />
     <bpmn:sequenceFlow id="Flow_1b0qixs" sourceRef="Gateway_0mx8n6w" targetRef="Event_0nbrcot" />
     <bpmn:subProcess id="subProcessOtherDevice" name="Authorize with other device">
       <bpmn:incoming>biometricFlow</bpmn:incoming>
@@ -57,30 +57,95 @@
         <bpmn:script>println "Biometric authorization push another device"</bpmn:script>
       </bpmn:scriptTask>
     </bpmn:subProcess>
-    <bpmn:subProcess id="Activity_0m80htr">
+    <bpmn:subProcess id="LoopActivity">
       <bpmn:incoming>passwordFlow</bpmn:incoming>
-      <bpmn:outgoing>Flow_1cf1ukx</bpmn:outgoing>
+      <bpmn:outgoing>Flow_1anlvi4</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="true">
+        <bpmn:loopCardinality xsi:type="bpmn:tFormalExpression">3</bpmn:loopCardinality>
+        <bpmn:completionCondition xsi:type="bpmn:tFormalExpression">${execution.getVariable("isValid")==true}</bpmn:completionCondition>
+      </bpmn:multiInstanceLoopCharacteristics>
       <bpmn:startEvent id="startPassword">
+        <bpmn:extensionElements>
+          <camunda:executionListener event="start">
+            <camunda:script scriptFormat="javascript">java.lang.System.out.println("Tentative #" + execution.getVariable("loopCounter"));</camunda:script>
+          </camunda:executionListener>
+        </bpmn:extensionElements>
         <bpmn:outgoing>Flow_17exb1f</bpmn:outgoing>
       </bpmn:startEvent>
       <bpmn:userTask id="passwordForm" name="Ask for password">
+        <bpmn:extensionElements>
+          <camunda:formData>
+            <camunda:formField id="password" label="Password" type="string" />
+          </camunda:formData>
+        </bpmn:extensionElements>
         <bpmn:incoming>Flow_17exb1f</bpmn:incoming>
-        <bpmn:outgoing>Flow_1mgesij</bpmn:outgoing>
+        <bpmn:outgoing>Flow_1xto3js</bpmn:outgoing>
       </bpmn:userTask>
       <bpmn:endEvent id="endPassword">
         <bpmn:incoming>Flow_1mgesij</bpmn:incoming>
       </bpmn:endEvent>
+      <bpmn:serviceTask id="ValidatePasswordService" name="Validate password" camunda:expression="${execution.getVariable(&#34;password&#34;).equals(&#34;111111&#34;)}" camunda:resultVariable="isValid">
+        <bpmn:incoming>Flow_1xto3js</bpmn:incoming>
+        <bpmn:outgoing>Flow_1mgesij</bpmn:outgoing>
+      </bpmn:serviceTask>
       <bpmn:sequenceFlow id="Flow_17exb1f" sourceRef="startPassword" targetRef="passwordForm" />
-      <bpmn:sequenceFlow id="Flow_1mgesij" sourceRef="passwordForm" targetRef="endPassword" />
+      <bpmn:sequenceFlow id="Flow_1xto3js" sourceRef="passwordForm" targetRef="ValidatePasswordService" />
+      <bpmn:sequenceFlow id="Flow_1mgesij" sourceRef="ValidatePasswordService" targetRef="endPassword" />
+      <bpmn:sequenceFlow id="Flow_02u73l5" sourceRef="ValidCondition" targetRef="SendPasswordIsValid" />
+      <bpmn:boundaryEvent id="ValidCondition" attachedToRef="ValidatePasswordService">
+        <bpmn:outgoing>Flow_02u73l5</bpmn:outgoing>
+        <bpmn:conditionalEventDefinition id="ConditionalEventDefinition_03v611p" camunda:variableName="isValid" camunda:variableEvents="create,update">
+          <bpmn:condition xsi:type="bpmn:tFormalExpression">${isValid == true}</bpmn:condition>
+        </bpmn:conditionalEventDefinition>
+      </bpmn:boundaryEvent>
+      <bpmn:endEvent id="SendPasswordIsValid" name="password is valid">
+        <bpmn:incoming>Flow_02u73l5</bpmn:incoming>
+        <bpmn:messageEventDefinition id="MessageEventDefinition_16yf9q2" messageRef="Message_0dfqafp" camunda:expression="${execution.getProcessEngineServices().getRuntimeService().createMessageCorrelation(&#34;PasswordIsValid&#34;).correlateWithResult()}" />
+      </bpmn:endEvent>
+      <bpmn:boundaryEvent id="ErrorCondition" attachedToRef="ValidatePasswordService">
+        <bpmn:outgoing>Flow_1sa08nw</bpmn:outgoing>
+        <bpmn:conditionalEventDefinition id="ConditionalEventDefinition_1hlm0o5" camunda:variableName="isValid" camunda:variableEvents="create,update">
+          <bpmn:condition xsi:type="bpmn:tFormalExpression">${isValid == false &amp;&amp; loopCounter == 2}</bpmn:condition>
+        </bpmn:conditionalEventDefinition>
+      </bpmn:boundaryEvent>
+      <bpmn:sequenceFlow id="Flow_1sa08nw" sourceRef="ErrorCondition" targetRef="ThrowError" />
+      <bpmn:endEvent id="ThrowError" name="Password locked">
+        <bpmn:incoming>Flow_1sa08nw</bpmn:incoming>
+        <bpmn:errorEventDefinition id="ErrorEventDefinition_07h9yp6" errorRef="Error_0ytrhs7" />
+      </bpmn:endEvent>
     </bpmn:subProcess>
+    <bpmn:boundaryEvent id="CatchPasswordIsValid" name="password is valid" attachedToRef="LoopActivity">
+      <bpmn:outgoing>Flow_1cf1ukx</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MessageEventDefinition_1qkzvqb" messageRef="Message_0dfqafp" />
+    </bpmn:boundaryEvent>
+    <bpmn:boundaryEvent id="CatchPasswordLockedError" name="password locked" attachedToRef="LoopActivity">
+      <bpmn:outgoing>Flow_0tnjkq1</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="ErrorEventDefinition_04myax9" errorRef="Error_0ytrhs7" camunda:errorCodeVariable="passwordError" camunda:errorMessageVariable="passwordMessage" />
+    </bpmn:boundaryEvent>
+    <bpmn:sequenceFlow id="Flow_0tnjkq1" sourceRef="CatchPasswordLockedError" targetRef="PasswordLocked" />
+    <bpmn:endEvent id="Event_1e9dov3">
+      <bpmn:incoming>Flow_0k390fg</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_0k390fg" sourceRef="PasswordLocked" targetRef="Event_1e9dov3" />
+    <bpmn:scriptTask id="PasswordLocked" name="Print password locked" scriptFormat="groovy">
+      <bpmn:incoming>Flow_0tnjkq1</bpmn:incoming>
+      <bpmn:outgoing>Flow_0k390fg</bpmn:outgoing>
+      <bpmn:script>println "Password should be blocked"</bpmn:script>
+    </bpmn:scriptTask>
+    <bpmn:sequenceFlow id="Flow_1anlvi4" sourceRef="LoopActivity" targetRef="Event_1pmuidv" />
+    <bpmn:endEvent id="Event_1pmuidv">
+      <bpmn:incoming>Flow_1anlvi4</bpmn:incoming>
+    </bpmn:endEvent>
   </bpmn:process>
+  <bpmn:message id="Message_0dfqafp" name="PasswordIsValid" />
+  <bpmn:error id="Error_0ytrhs7" name="PasswordLocked" errorCode="PasswordLocked" camunda:errorMessage="Password was locked!" />
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="AuthorizationProcess">
       <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
         <dc:Bounds x="179" y="199" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_0nbrcot_di" bpmnElement="Event_0nbrcot">
-        <dc:Bounds x="822" y="199" width="36" height="36" />
+        <dc:Bounds x="1082" y="199" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Activity_1392rb0_di" bpmnElement="SelectAuthorizationType">
         <dc:Bounds x="270" y="177" width="100" height="80" />
@@ -89,14 +154,14 @@
         <dc:Bounds x="445" y="192" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_0mx8n6w_di" bpmnElement="Gateway_0mx8n6w" isMarkerVisible="true">
-        <dc:Bounds x="705" y="192" width="50" height="50" />
+        <dc:Bounds x="995" y="192" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Activity_112o0n7_di" bpmnElement="subProcessOtherDevice">
         <dc:Bounds x="550" y="80" width="100" height="80" />
         <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_1mgxpx3_di" bpmnElement="Activity_0m80htr" isExpanded="true">
-        <dc:Bounds x="440" y="340" width="360" height="200" />
+      <bpmndi:BPMNShape id="Activity_1fb6nw8_di" bpmnElement="LoopActivity" isExpanded="true">
+        <dc:Bounds x="440" y="340" width="500" height="270" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_0kbnyy0_di" bpmnElement="startPassword">
         <dc:Bounds x="462" y="412" width="36" height="36" />
@@ -105,16 +170,76 @@
         <dc:Bounds x="550" y="390" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_10znhoc_di" bpmnElement="endPassword">
-        <dc:Bounds x="702" y="412" width="36" height="36" />
+        <dc:Bounds x="882" y="412" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_10fzwc4_di" bpmnElement="ValidatePasswordService">
+        <dc:Bounds x="710" y="390" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1ehk8af_di" bpmnElement="SendPasswordIsValid">
+        <dc:Bounds x="812" y="522" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="788" y="565" width="84" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0f28q6d_di" bpmnElement="ThrowError">
+        <dc:Bounds x="682" y="522" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="658" y="565" width="84" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_17oe5zm_di" bpmnElement="ErrorCondition">
+        <dc:Bounds x="722" y="452" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_01aj7n8_di" bpmnElement="ValidCondition">
+        <dc:Bounds x="772" y="452" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_17exb1f_di" bpmnElement="Flow_17exb1f">
         <di:waypoint x="498" y="430" />
         <di:waypoint x="550" y="430" />
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_1mgesij_di" bpmnElement="Flow_1mgesij">
+      <bpmndi:BPMNEdge id="Flow_1xto3js_di" bpmnElement="Flow_1xto3js">
         <di:waypoint x="650" y="430" />
-        <di:waypoint x="702" y="430" />
+        <di:waypoint x="710" y="430" />
       </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1mgesij_di" bpmnElement="Flow_1mgesij">
+        <di:waypoint x="810" y="430" />
+        <di:waypoint x="882" y="430" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1053" y="522" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_02u73l5_di" bpmnElement="Flow_02u73l5">
+        <di:waypoint x="790" y="488" />
+        <di:waypoint x="790" y="540" />
+        <di:waypoint x="812" y="540" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1sa08nw_di" bpmnElement="Flow_1sa08nw">
+        <di:waypoint x="740" y="488" />
+        <di:waypoint x="740" y="540" />
+        <di:waypoint x="718" y="540" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Event_1e9dov3_di" bpmnElement="Event_1e9dov3">
+        <dc:Bounds x="972" y="682" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0y8pv16_di" bpmnElement="PasswordLocked">
+        <dc:Bounds x="820" y="660" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1pmuidv_di" bpmnElement="Event_1pmuidv">
+        <dc:Bounds x="972" y="457" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1gg8rd7_di" bpmnElement="CatchPasswordLockedError">
+        <dc:Bounds x="732" y="592" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="759" y="635" width="82" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1pa70x2_di" bpmnElement="CatchPasswordIsValid">
+        <dc:Bounds x="862" y="592" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="888" y="635" width="84" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_14c2ir8_di" bpmnElement="Flow_14c2ir8">
         <di:waypoint x="215" y="217" />
         <di:waypoint x="270" y="217" />
@@ -125,8 +250,8 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_0bw2326_di" bpmnElement="Flow_0bw2326">
         <di:waypoint x="650" y="120" />
-        <di:waypoint x="730" y="120" />
-        <di:waypoint x="730" y="192" />
+        <di:waypoint x="1020" y="120" />
+        <di:waypoint x="1020" y="192" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_1cu4uz4_di" bpmnElement="biometricFlow">
         <di:waypoint x="470" y="192" />
@@ -144,12 +269,27 @@
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_1cf1ukx_di" bpmnElement="Flow_1cf1ukx">
-        <di:waypoint x="730" y="340" />
-        <di:waypoint x="730" y="242" />
+        <di:waypoint x="880" y="628" />
+        <di:waypoint x="880" y="650" />
+        <di:waypoint x="1020" y="650" />
+        <di:waypoint x="1020" y="242" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_1b0qixs_di" bpmnElement="Flow_1b0qixs">
-        <di:waypoint x="755" y="217" />
-        <di:waypoint x="822" y="217" />
+        <di:waypoint x="1045" y="217" />
+        <di:waypoint x="1082" y="217" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0tnjkq1_di" bpmnElement="Flow_0tnjkq1">
+        <di:waypoint x="750" y="628" />
+        <di:waypoint x="750" y="700" />
+        <di:waypoint x="820" y="700" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0k390fg_di" bpmnElement="Flow_0k390fg">
+        <di:waypoint x="920" y="700" />
+        <di:waypoint x="972" y="700" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1anlvi4_di" bpmnElement="Flow_1anlvi4">
+        <di:waypoint x="940" y="475" />
+        <di:waypoint x="972" y="475" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
