@@ -503,7 +503,50 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 		</plugin>
 		```
 
-3. Add avro schemas in src/main/resources/avro. The following file and schema should be added:
+3. Add avro schemas in src/main/resources/avro and remember to register them into Kafka Schema Registry. The avro object will be created automatically in `target/generated-sources` by the `maven-avro-plugin`.
+	Avro schema is the contract between Camunda and Other External service.
+	The json that Camunda send for a **request** to an external is defined in the project as follows:
+
+	`CamundaRequestEvent`
+	```json
+	{
+		"workflowId": "da2fd17b-0d0f-4d00-b88e-13d0361073c1",
+		"taskId": "7055fb17-b008-4142-98f2-dcf9f4d13dc2",
+		"feedbackRequired": true,
+		"feedback": {
+			"feedbackEvent": "AuthorizedByOtherDevice",
+			"feedbackType": "MESSAGE"
+		},
+		"data": {
+			"author": "gandelfwiz"
+		}
+	}
+	```
+	The idea is that Camunda provides keys of its process and ask for a feedback if the process subsequently will wait it. Additional properties can be put in `data` object that represent the business/audit data. The property `feedbackRequired` will communicate to the external service whether a feedback is expected or not.
+
+	The feedback event will be similar, but will add the result of external service.
+
+	`CamundaFeedbackEvent`
+	```json
+	{
+		"workflowId": "7b17db81-d0d0-11ee-a84d-581cf8936878",
+		"taskId": "7055fb17-b008-4142-98f2-dcf9f4d13dc2",
+		"result": "OK",
+		"timestamp": "2023-01-23T01:03:10",
+		"componentName": "curl",
+		"feedback": {
+			"feedbackEvent": "AuthorizedByOtherDevice",
+			"feedbackType": "MESSAGE"
+		},
+		"data": {
+			"author": "gandelfwiz"
+		}
+	}
+	```
+
+	Obviously the contract is defined arbitrarily for the scope of this project. It is possible to create any event based on the needs and rules that in a project are defined.
+
+	The following files and schemas should be added:
 
 	File: `camunda_request.avsc`
 	```json
@@ -702,7 +745,14 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 
 		}			
 		```
-	* `service` package with java class `KafkaService`
+	* `service` package with java class `KafkaService` that:
+		* implement kafka publishing
+		* implement the REST call to Camunda for the feedback. The REST API used are: 
+			- POST /message
+			- POST /signal
+		* implement 2 KafkaListeners: one for feedback and one to implement a mock of 
+			camunda request. The mock will wait 5 seconds and then will publish the feedback
+			that the kafka listener of feedback will forward to Camunda using Rest API
 
 		```java
 		@Service
@@ -835,7 +885,9 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 		}
 		```
 
-	* in sidecar package add the following configuration class:
+	* in sidecar package add the following configuration class that:
+		* make avro object jackson-compliant
+		* define rest template with custom object mapper
 
 		```java
 		@Configuration
@@ -894,98 +946,98 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 		```
 	* Create the model to call Camunda under model.camunda. The models were created using the swagger editor starting from [OpenApi](https://docs.camunda.org/rest/camunda-bpm-platform/7.20/) definition of Camunda.
 
-	```java
-	@Data
-	public class AtomLink {
-		private String rel = null;
-		private String href = null;
-		private String method = null;
-	}
-	@Data
-	@Builder
-	public class CorrelationMessageDto {
-		private String messageName;
-		private String businessKey;
-		private String tenantId;
-		private Boolean withoutTenantId = false;
-		private String processInstanceId;
-		private Map<String, VariableValueDto> correlationKeys;
-		private Map<String, VariableValueDto> localCorrelationKeys;
-		private Map<String, VariableValueDto> processVariables;
-		private Map<String, VariableValueDto> processVariablesLocal;
-		private Boolean all = false;
-		private Boolean resultEnabled = false;
-		private Boolean variablesInResultEnabled = false;
-	}
-	@Data
-	public class ExecutionDto {
-		private String id;
-		private String processInstanceId;
-		private Boolean ended;
-		private String tenantId;
-	}
-	@Data
-	public class MessageCorrelationResultWithVariableDto {
-		/**
-		* Indicates if the message was correlated to a message start event or an  intermediate message catching event. In the first case, the resultType is  `ProcessDefinition` and otherwise `Execution`.
-		*/
-		@AllArgsConstructor
-		public enum ResultTypeEnum {
-			EXECUTION("Execution"),
-			PROCESSDEFINITION("ProcessDefinition");
-
-			private String value;
-
-			@Override
-			@JsonValue
-			public String toString() {
-				return String.valueOf(value);
-			}
-
-			@JsonCreator
-			public static ResultTypeEnum fromValue(String text) {
-				for (ResultTypeEnum b : ResultTypeEnum.values()) {
-					if (String.valueOf(b.value).equals(text)) {
-						return b;
-					}
-				}
-				return null;
-			}
+		```java
+		@Data
+		public class AtomLink {
+			private String rel = null;
+			private String href = null;
+			private String method = null;
 		}
+		@Data
+		@Builder
+		public class CorrelationMessageDto {
+			private String messageName;
+			private String businessKey;
+			private String tenantId;
+			private Boolean withoutTenantId = false;
+			private String processInstanceId;
+			private Map<String, VariableValueDto> correlationKeys;
+			private Map<String, VariableValueDto> localCorrelationKeys;
+			private Map<String, VariableValueDto> processVariables;
+			private Map<String, VariableValueDto> processVariablesLocal;
+			private Boolean all = false;
+			private Boolean resultEnabled = false;
+			private Boolean variablesInResultEnabled = false;
+		}
+		@Data
+		public class ExecutionDto {
+			private String id;
+			private String processInstanceId;
+			private Boolean ended;
+			private String tenantId;
+		}
+		@Data
+		public class MessageCorrelationResultWithVariableDto {
+			/**
+			* Indicates if the message was correlated to a message start event or an  intermediate message catching event. In the first case, the resultType is  `ProcessDefinition` and otherwise `Execution`.
+			*/
+			@AllArgsConstructor
+			public enum ResultTypeEnum {
+				EXECUTION("Execution"),
+				PROCESSDEFINITION("ProcessDefinition");
 
-		private ResultTypeEnum resultType = null;
-		private ProcessInstanceDto processInstance = null;
-		private ExecutionDto execution = null;
-		private Map<String, VariableValueDto> variables = null;
+				private String value;
 
-	}
-	@Data
-	public class ProcessInstanceDto {
-		private String id;
-		private String definitionId;
-		private String businessKey;
-		private String caseInstanceId;
-		private Boolean ended;
-		private Boolean suspended;
-		private String tenantId;
-		private List<AtomLink> links;
-	}
-	@Data
-	@Builder
-	public class SignalDto {
-		private String name;
-		private String executionId;
-		private Map<String, VariableValueDto> variables;
-		private String tenantId;
-		private Boolean withoutTenantId;
-	}
-	@Data
-	public class VariableValueDto {
-		private Object value;
-		private String type;
-		private Map<String, Object> valueInfo;
-	}
-	```
+				@Override
+				@JsonValue
+				public String toString() {
+					return String.valueOf(value);
+				}
+
+				@JsonCreator
+				public static ResultTypeEnum fromValue(String text) {
+					for (ResultTypeEnum b : ResultTypeEnum.values()) {
+						if (String.valueOf(b.value).equals(text)) {
+							return b;
+						}
+					}
+					return null;
+				}
+			}
+
+			private ResultTypeEnum resultType = null;
+			private ProcessInstanceDto processInstance = null;
+			private ExecutionDto execution = null;
+			private Map<String, VariableValueDto> variables = null;
+
+		}
+		@Data
+		public class ProcessInstanceDto {
+			private String id;
+			private String definitionId;
+			private String businessKey;
+			private String caseInstanceId;
+			private Boolean ended;
+			private Boolean suspended;
+			private String tenantId;
+			private List<AtomLink> links;
+		}
+		@Data
+		@Builder
+		public class SignalDto {
+			private String name;
+			private String executionId;
+			private Map<String, VariableValueDto> variables;
+			private String tenantId;
+			private Boolean withoutTenantId;
+		}
+		@Data
+		public class VariableValueDto {
+			private Object value;
+			private String type;
+			private Map<String, Object> valueInfo;
+		}
+		```
 
 6. You can check if everything works well running the application
 
