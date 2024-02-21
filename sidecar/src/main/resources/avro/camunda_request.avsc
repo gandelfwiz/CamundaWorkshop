@@ -1,0 +1,55 @@
+{
+  "name": "CamundaRequestEvent",
+  "type": "record",
+  "doc": "Event used by Camunda to request an action to other applications",
+  "namespace": "org.camunda.kafka",
+  "fields": [
+    {
+      "name": "workflowId",
+      "type": "string"
+    },
+    {
+      "name": "taskId",
+      "type": "string"
+    },
+    {
+      "name": "feedbackRequired",
+      "type": "boolean"
+    },
+    {
+      "name": "feedback",
+      "type": [
+        "null",
+        {
+          "name": "FeedbackRecord",
+          "type": "record",
+          "fields": [
+            {
+              "name": "feedbackEvent",
+              "type": "string"
+            },
+            {
+              "name": "feedbackType",
+              "type": {
+                "type": "enum",
+                "symbols": [
+                  "SIGNAL",
+                  "MESSAGE"
+                ],
+                "name": "FeedbackTypeEnum"
+              }
+            }
+          ]
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "data",
+      "type": {
+        "type": "map",
+        "values": "string"
+      }
+    }
+  ]
+}

@@ -46,16 +46,82 @@
       <bpmn:startEvent id="startBiometric">
         <bpmn:outgoing>Flow_048q4o1</bpmn:outgoing>
       </bpmn:startEvent>
-      <bpmn:sequenceFlow id="Flow_048q4o1" sourceRef="startBiometric" targetRef="pushNotification" />
+      <bpmn:sequenceFlow id="Flow_048q4o1" sourceRef="startBiometric" targetRef="SendPush" />
       <bpmn:endEvent id="endBiometric">
-        <bpmn:incoming>Flow_10vy5xk</bpmn:incoming>
+        <bpmn:incoming>Flow_1kypxee</bpmn:incoming>
       </bpmn:endEvent>
-      <bpmn:sequenceFlow id="Flow_10vy5xk" sourceRef="pushNotification" targetRef="endBiometric" />
-      <bpmn:scriptTask id="pushNotification" name="Push other device" scriptFormat="groovy">
+      <bpmn:serviceTask id="SendPush" name="Push other device" camunda:asyncBefore="true">
+        <bpmn:extensionElements>
+          <camunda:connector>
+            <camunda:inputOutput>
+              <camunda:inputParameter name="headers">
+                <camunda:map>
+                  <camunda:entry key="Content-Type">application/json</camunda:entry>
+                  <camunda:entry key="Accept">application/json</camunda:entry>
+                </camunda:map>
+              </camunda:inputParameter>
+              <camunda:inputParameter name="method">POST</camunda:inputParameter>
+              <camunda:inputParameter name="url">http://localhost:8500/kafka/events/camunda/publishing</camunda:inputParameter>
+              <camunda:inputParameter name="payload">
+                <camunda:script scriptFormat="javascript">var payload = {
+	"workflowId": execution.getProcessInstanceId(),
+	"taskId": execution.getId(),
+        "feedbackRequired": true,
+        "feedback": {
+                "feedbackEvent": "AuthorizedByOtherDevice",
+                "feedbackType": "MESSAGE"
+        },
+	"data": {
+		"author": "gandelfwiz"
+	}
+}
+
+JSON.stringify(payload);</camunda:script>
+              </camunda:inputParameter>
+              <camunda:outputParameter name="statusCode">${statusCode}</camunda:outputParameter>
+            </camunda:inputOutput>
+            <camunda:connectorId>http-connector</camunda:connectorId>
+          </camunda:connector>
+          <camunda:failedJobRetryTimeCycle>R3/PT5S</camunda:failedJobRetryTimeCycle>
+          <camunda:executionListener event="end">
+            <camunda:script scriptFormat="javascript">if (statusCode&gt;299) {
+    throw new org.camunda.bpm.engine.ProcessEngineException("Error sending push. Return code:" + statusCode, statusCode); 
+}</camunda:script>
+          </camunda:executionListener>
+        </bpmn:extensionElements>
         <bpmn:incoming>Flow_048q4o1</bpmn:incoming>
-        <bpmn:outgoing>Flow_10vy5xk</bpmn:outgoing>
-        <bpmn:script>println "Biometric authorization push another device"</bpmn:script>
-      </bpmn:scriptTask>
+        <bpmn:outgoing>Flow_0p7vhma</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:sequenceFlow id="Flow_0p7vhma" sourceRef="SendPush" targetRef="Gateway_0bw3bqr" />
+      <bpmn:eventBasedGateway id="Gateway_0bw3bqr">
+        <bpmn:incoming>Flow_0p7vhma</bpmn:incoming>
+        <bpmn:outgoing>Flow_05hp9aj</bpmn:outgoing>
+        <bpmn:outgoing>Flow_0kn8syo</bpmn:outgoing>
+      </bpmn:eventBasedGateway>
+      <bpmn:intermediateCatchEvent id="Timer1M" name="1 minute">
+        <bpmn:extensionElements>
+          <camunda:executionListener event="end">
+            <camunda:script scriptFormat="javascript">throw new org.camunda.bpm.engine.ProcessEngineException("No response received from device"); </camunda:script>
+          </camunda:executionListener>
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_05hp9aj</bpmn:incoming>
+        <bpmn:outgoing>Flow_08dunct</bpmn:outgoing>
+        <bpmn:timerEventDefinition id="TimerEventDefinition_086w6no">
+          <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1M</bpmn:timeDuration>
+        </bpmn:timerEventDefinition>
+      </bpmn:intermediateCatchEvent>
+      <bpmn:sequenceFlow id="Flow_05hp9aj" sourceRef="Gateway_0bw3bqr" targetRef="Timer1M" />
+      <bpmn:sequenceFlow id="Flow_0kn8syo" sourceRef="Gateway_0bw3bqr" targetRef="AuthorizationReceived" />
+      <bpmn:intermediateCatchEvent id="AuthorizationReceived" name="Authorization is given">
+        <bpmn:incoming>Flow_0kn8syo</bpmn:incoming>
+        <bpmn:outgoing>Flow_1kypxee</bpmn:outgoing>
+        <bpmn:messageEventDefinition id="MessageEventDefinition_0ofmi46" messageRef="Message_188njke" />
+      </bpmn:intermediateCatchEvent>
+      <bpmn:sequenceFlow id="Flow_1kypxee" sourceRef="AuthorizationReceived" targetRef="endBiometric" />
+      <bpmn:sequenceFlow id="Flow_08dunct" sourceRef="Timer1M" targetRef="Event_1xsb8d4" />
+      <bpmn:endEvent id="Event_1xsb8d4">
+        <bpmn:incoming>Flow_08dunct</bpmn:incoming>
+      </bpmn:endEvent>
     </bpmn:subProcess>
     <bpmn:subProcess id="LoopActivity">
       <bpmn:incoming>passwordFlow</bpmn:incoming>
@@ -155,7 +221,7 @@
               <camunda:inputParameter name="url">http://localhost:8900/external-service/sms</camunda:inputParameter>
               <camunda:inputParameter name="payload">
                 <camunda:script scriptFormat="javascript">var payload = {
-    "phoneNumber": null,
+    "phoneNumber": "+39111223344",
     "message": "Send sms from Camunda Process for reason code " + execution.getVariable("escalateCode")
 }
 
@@ -172,7 +238,7 @@ JSON.stringify(payload);</camunda:script>
           <camunda:failedJobRetryTimeCycle>R3/PT5S</camunda:failedJobRetryTimeCycle>
           <camunda:executionListener event="end">
             <camunda:script scriptFormat="javascript">if (statusCode&gt;299) {
-    throw new org.apache.http.HttpException("Error sending sms : " + response); 
+    throw new org.camunda.bpm.engine.ProcessEngineException("Error sending SMS: " + response, statusCode); 
 }</camunda:script>
           </camunda:executionListener>
         </bpmn:extensionElements>
@@ -190,6 +256,8 @@ JSON.stringify(payload);</camunda:script>
   <bpmn:message id="Message_0dfqafp" name="PasswordIsValid" />
   <bpmn:error id="Error_0ytrhs7" name="PasswordLocked" errorCode="PasswordLocked" camunda:errorMessage="Password was locked!" />
   <bpmn:escalation id="Escalation_11qamde" name="WarnCustomer" escalationCode="warn" />
+  <bpmn:message id="Message_188njke" name="AuthorizedByOtherDevice" />
+  <bpmn:error id="Error_1u1bxwg" name="Timeout" errorCode="408" camunda:errorMessage="Too long to give the authorization" />
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="AuthorizationProcess">
       <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
@@ -373,22 +441,58 @@ JSON.stringify(payload);</camunda:script>
   <bpmndi:BPMNDiagram id="BPMNDiagram_0tvcint">
     <bpmndi:BPMNPlane id="BPMNPlane_02z0wcw" bpmnElement="subProcessOtherDevice">
       <bpmndi:BPMNShape id="Event_161smv9_di" bpmnElement="startBiometric">
-        <dc:Bounds x="152" y="102" width="36" height="36" />
+        <dc:Bounds x="142" y="112" width="36" height="36" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Event_0qtkgot_di" bpmnElement="endBiometric">
-        <dc:Bounds x="392" y="102" width="36" height="36" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_0b5yvl1_di" bpmnElement="pushNotification">
-        <dc:Bounds x="240" y="80" width="100" height="80" />
+      <bpmndi:BPMNShape id="BPMNShape_14c5v1p" bpmnElement="SendPush">
+        <dc:Bounds x="230" y="90" width="100" height="80" />
         <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_0hipn78_di" bpmnElement="Gateway_0bw3bqr">
+        <dc:Bounds x="385" y="105" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0h4na9s_di" bpmnElement="Timer1M">
+        <dc:Bounds x="492" y="62" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="489" y="105" width="43" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1cmec6y_di" bpmnElement="AuthorizationReceived">
+        <dc:Bounds x="492" y="172" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="474" y="215" width="75" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0qtkgot_di" bpmnElement="endBiometric">
+        <dc:Bounds x="592" y="172" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1xsb8d4_di" bpmnElement="Event_1xsb8d4">
+        <dc:Bounds x="592" y="62" width="36" height="36" />
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_048q4o1_di" bpmnElement="Flow_048q4o1">
-        <di:waypoint x="188" y="120" />
-        <di:waypoint x="240" y="120" />
+        <di:waypoint x="178" y="130" />
+        <di:waypoint x="230" y="130" />
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_10vy5xk_di" bpmnElement="Flow_10vy5xk">
-        <di:waypoint x="340" y="120" />
-        <di:waypoint x="392" y="120" />
+      <bpmndi:BPMNEdge id="Flow_0p7vhma_di" bpmnElement="Flow_0p7vhma">
+        <di:waypoint x="330" y="130" />
+        <di:waypoint x="385" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_05hp9aj_di" bpmnElement="Flow_05hp9aj">
+        <di:waypoint x="410" y="105" />
+        <di:waypoint x="410" y="80" />
+        <di:waypoint x="492" y="80" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0kn8syo_di" bpmnElement="Flow_0kn8syo">
+        <di:waypoint x="410" y="155" />
+        <di:waypoint x="410" y="190" />
+        <di:waypoint x="492" y="190" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1kypxee_di" bpmnElement="Flow_1kypxee">
+        <di:waypoint x="528" y="190" />
+        <di:waypoint x="592" y="190" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_08dunct_di" bpmnElement="Flow_08dunct">
+        <di:waypoint x="528" y="80" />
+        <di:waypoint x="592" y="80" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

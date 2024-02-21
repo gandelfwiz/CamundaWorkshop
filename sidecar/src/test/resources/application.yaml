@@ -1,0 +1,26 @@
+kafka:
+  request-topic: workshop_camunda_request_topic
+  feedback-topic: workshop_camunda_feedback_topic
+
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    properties:
+      schema:
+        registry:
+          url: mock://testurl
+      spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+      spring.deserializer.value.delegate.class: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      specific.avro.reader: true
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+    consumer:
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      group-id: camunda-sidecar-local
+      auto-offset-reset: earliest
+    auto.register.schema: false
+camunda:
+  server:
+    url: http://localhost:8080/engine-rest

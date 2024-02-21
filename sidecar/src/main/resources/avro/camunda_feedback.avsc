@@ -1,0 +1,71 @@
+{
+  "name": "CamundaFeedbackEvent",
+  "type": "record",
+  "doc": "Event used to trigger a feedback to Camunda",
+  "namespace": "org.camunda.kafka",
+  "fields": [
+    {
+      "name": "workflowId",
+      "type": "string"
+    },
+    {
+      "name": "taskId",
+      "type": "string"
+    },
+    {
+      "name": "result",
+      "type": {
+        "name": "ResultEnum",
+        "type": "enum",
+        "symbols": [
+          "OK",
+          "NOK"
+        ]
+      }
+    },
+    {
+      "name": "timestamp",
+      "type": "string"
+    },
+    {
+      "name": "componentName",
+      "type": "string"
+    },
+    {
+      "name": "Feedback",
+      "type": [
+        "null",
+        {
+          "name": "FeedbackRecord",
+          "type": "record",
+          "doc": "Schema used to define feedback",
+          "fields": [
+            {
+              "name": "feedbackEvent",
+              "type": "string"
+            },
+            {
+              "name": "feedbackType",
+              "type": {
+                "type": "enum",
+                "symbols": [
+                  "SIGNAL",
+                  "MESSAGE"
+                ],
+                "name": "FeedbackTypeEnum"
+              }
+            }
+          ]
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "data",
+      "type": {
+        "type": "map",
+        "values": "string"
+      }
+    }
+  ]
+}
