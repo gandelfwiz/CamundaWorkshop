@@ -56,7 +56,7 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 5. [Escalate and call external rest service](#step5)
 6. [Resiliency and Retry](#step6)\
 	I. [BPMN based](#step6-1)\
-	II. [Camunda engine based](#step6-1)
+	II. [Camunda engine based](#step6-2)
 7. [Kafka integration through sidecar pattern](#step7)
 8. [Transaction and compensation](#step8)
 9. [Cross-process interaction](#step9)
