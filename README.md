@@ -48,6 +48,22 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+### Table of contents
+1. [Create a simple workflow](#step1)
+2. [Create a variable and pass from one task to another](#step2)
+3. [Add a gateway. Create collapsed and extended subprocess](#step3)
+4. [Loop on password validation. Boundary events](#step4)
+5. [Escalate and call external rest service](#step5)
+6. [Resiliency and Retry](#step6)\
+	I. [BPMN based](#step6-1)\
+	II. [Camunda engine based](#step6-1)
+7. [Kafka integration through sidecar pattern](#step7)
+8. [Transaction and compensation](#step8)
+
+&nbsp;
+
+<div id='step1'/>
+
 ### **Step 1: create a simple workflow**
 
 &nbsp;
@@ -69,6 +85,8 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 5. Complete manually from task list the task.
 
 &nbsp;
+
+<div id='step2'/>
 
 ### **Step 2: create a variable and pass from one task to another**
 
@@ -112,6 +130,8 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step3'/>
+
 ### **Step 3: add a gateway. Create a collapsed subprocess and an extended one**
 
 &nbsp;
@@ -149,6 +169,7 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step4'/>
 
 ### **Step 4: loop on password validation. Boundary events**
 
@@ -211,6 +232,8 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 11. Once all configurations are done you can deploy and test the process. If you put a password different than 111111 after 3 times you will exit with the message `Password should be blocked`, instead if you put the 111111 password the process will be completed succesfully.
 
 &nbsp;
+
+<div id='step5'/>
 
 ### **Step 5: Escalate and call external rest service**
 
@@ -357,8 +380,13 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step6'/>
+
 ### **Step 6: Resilience and Retry**
 &nbsp;
+
+<div id='step6-1'/>
+
 #### **I. BPMN based**
 
 1. It is possible to implement in BPMN the retry. Change the diagram as follows:
@@ -410,6 +438,9 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 	```
 
 &nbsp;
+
+<div id='step6-2'/>
+
 #### **II. Camunda engine based**
 
 
@@ -440,6 +471,8 @@ For this reason the Camunda Engine approach is preferrable. If you Start back fr
 5. Deploy the process and test it. When you will put for 3 times the wrong password the system will run an automatic retry.
 
 &nbsp;
+
+<div id='step7'/>
 
 ### **Step 7: Kafka integration**
 
@@ -1050,6 +1083,8 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 
 &nbsp;
 
+<div id='step8'/>
+
 ### **Step 8: Transaction and Compensation**
 
 > A transaction is a set of tasks that should be executed consistently. If one task in the chain fails an action should do to compensate the previous actions done.
@@ -1158,4 +1193,3 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 	```
 
 &nbsp;
-
