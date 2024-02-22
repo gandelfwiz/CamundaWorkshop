@@ -48,6 +48,17 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+### Table of contents
+1. [Create a simple workflow](#step1)
+2. [Create a variable and pass from one task to another](#step2)
+3. [Add a gateway. Create collapsed and extended subprocess](#step3)
+4. [Loop on password validation. Boundary events](#step4)
+5. [Escalate and call external rest service](#step5)
+
+&nbsp;
+
+<div id='step1'/>
+
 ### **Step 1: create a simple workflow**
 
 &nbsp;
@@ -69,6 +80,8 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 5. Complete manually from task list the task.
 
 &nbsp;
+
+<div id='step2'/>
 
 ### **Step 2: create a variable and pass from one task to another**
 
@@ -112,6 +125,8 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step3'/>
+
 ### **Step 3: add a gateway. Create a collapsed subprocess and an extended one**
 
 &nbsp;
@@ -149,6 +164,7 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step4'/>
 
 ### **Step 4: loop on password validation. Boundary events**
 
@@ -211,6 +227,8 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 11. Once all configurations are done you can deploy and test the process. If you put a password different than 111111 after 3 times you will exit with the message `Password should be blocked`, instead if you put the 111111 password the process will be completed succesfully.
 
 &nbsp;
+
+<div id='step5'/>
 
 ### **Step 5: Escalate and call external rest service**
 
@@ -336,7 +354,14 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 			```
 	- Set the *connector outputs* variable with name `response` defined as expression `${S(response)}`. This will convert the response object in json using a [Camunda Spin Framework](https://docs.camunda.org/manual/7.20/reference/spin/).
 	- Pass the connector response to the next task setting a variable *resultSms* as expression `${response}`
-	
+	- Add an Execution Listener to handle the status code different than 2xx as and *end* Event Type. Implement it with the following javascript:
+
+		```javascript
+		if (statusCode>299) {
+			throw new org.camunda.bpm.engine.ProcessEngineException("Error sending SMS: " + response, statusCode); 
+		}
+		``` 
+
 10. After this complex configuration you can configure a script to print the sms sending result in console with a script task based on the following javascript code:
 	```javascript
 	java.lang.System.out.println("Result of sending: " + execution.getVariable("resultSms"));
@@ -350,8 +375,5 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
-
-
-
-
+<div id='step6'/>
 
