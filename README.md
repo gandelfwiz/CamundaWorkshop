@@ -48,21 +48,29 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+### Table of contents
+1. [Create a simple workflow](#step1)
+2. [Create a variable and pass from one task to another](#step2)
+
+&nbsp;
+
+<div id='step1'/>
+
 ### **Step 1: create a simple workflow**
 
 &nbsp;
 
 1. Run camunda-bpm-run-7 standalone from unzipped folder:
 
-```dos
+	```dos
 	start.bat
-```
+	```
 
 2. Run camunda-modeler-5 from unzipped folder with a double click
 
 3. Create the following easy diagram
 
-![Step 1 process: A simple user task not implemented](images/authorization.png)
+	![Step 1 process: A simple user task not implemented](images/authorization.png)
 
 4. Deploy it and start the process
 
@@ -70,17 +78,19 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step2'/>
+
 ### **Step 2: create a variable and pass from one task to another**
 
 &nbsp;
 
 1. Add to the user task the following configuration:
 
-![Step 2 variable: Add a variable to the process](images/authorization_add_variable.png)
+	![Step 2 variable: Add a variable to the process](images/authorization_add_variable.png)
 
 2. Add a script task to receive and print the variable chosen by user:
 
-![Step 2 script: A simple script task that prints the variable of the previous one](images/authorization_step2_process.png)
+	![Step 2 script: A simple script task that prints the variable of the previous one](images/authorization_step2_process.png)
 
 3. Configure the script task as follows:
 
@@ -112,3 +122,4 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step3'/>
