@@ -48,21 +48,31 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+### Table of contents
+1. [Create a simple workflow](#step1)
+2. [Create a variable and pass from one task to another](#step2)
+3. [Add a gateway. Create collapsed and extended subprocess](#step3)
+
+
+&nbsp;
+
+<div id='step1'/>
+
 ### **Step 1: create a simple workflow**
 
 &nbsp;
 
 1. Run camunda-bpm-run-7 standalone from unzipped folder:
 
-```dos
+	```dos
 	start.bat
-```
+	```
 
 2. Run camunda-modeler-5 from unzipped folder with a double click
 
 3. Create the following easy diagram
 
-![Step 1 process: A simple user task not implemented](images/authorization.png)
+	![Step 1 process: A simple user task not implemented](images/authorization.png)
 
 4. Deploy it and start the process
 
@@ -70,17 +80,19 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step2'/>
+
 ### **Step 2: create a variable and pass from one task to another**
 
 &nbsp;
 
 1. Add to the user task the following configuration:
 
-![Step 2 variable: Add a variable to the process](images/authorization_add_variable.png)
+	![Step 2 variable: Add a variable to the process](images/authorization_add_variable.png)
 
 2. Add a script task to receive and print the variable chosen by user:
 
-![Step 2 script: A simple script task that prints the variable of the previous one](images/authorization_step2_process.png)
+	![Step 2 script: A simple script task that prints the variable of the previous one](images/authorization_step2_process.png)
 
 3. Configure the script task as follows:
 
@@ -112,17 +124,19 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step3'/>
+
 ### **Step 3: add a gateway. Create a collapsed subprocess and an extended one**
 
 &nbsp;
 
 1. Change the process as follow:
 
-![Step 3 gateway: Add gateway and 2 subprocesses](images/authorization_step3_process.png)
+	![Step 3 gateway: Add gateway and 2 subprocesses](images/authorization_step3_process.png)
 
 2. Selecting the collapsed subprocess you can enter in the subprocess. Create the following subprocess:
 
-![Step 3 collapsed subprocess: definition of the subprocess](images/authorization_step3_biometric_subprocess.png)
+	![Step 3 collapsed subprocess: definition of the subprocess](images/authorization_step3_biometric_subprocess.png)
 
 3. Let's add configuration for the gateway. The arrow `biometric` will have a condition configured as follows:
 
@@ -135,9 +149,9 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 4. To check that the gateway works correctly configure in subprocess the script task as follows:
 
-```groovy
-println "Biometric authorization push another device"
-```
+	```groovy
+	println "Biometric authorization push another device"
+	```
 
 5. Now deploy the process and start it from tasklist.
 
@@ -148,4 +162,6 @@ println "Biometric authorization push another device"
 8. Select `Biometric` and in console you might read `Biometric authorization push another device`
 
 &nbsp;
+
+<div id='step4'/>
 
