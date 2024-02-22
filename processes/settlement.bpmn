@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_0xo7plr" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.20.0" modeler:executionPlatform="Camunda Platform" modeler:executionPlatformVersion="7.20.0">
+  <bpmn:process id="SettlementProcess" name="Infra day settlement" isExecutable="true" camunda:historyTimeToLive="180">
+    <bpmn:startEvent id="StartProcess">
+      <bpmn:extensionElements />
+      <bpmn:outgoing>Flow_0qys8sx</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:subProcess id="InfiniteLoop">
+      <bpmn:incoming>Flow_1t8cc1b</bpmn:incoming>
+      <bpmn:outgoing>Flow_1ng43xu</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="true">
+        <bpmn:loopCardinality xsi:type="bpmn:tFormalExpression">7</bpmn:loopCardinality>
+      </bpmn:multiInstanceLoopCharacteristics>
+      <bpmn:startEvent id="StartSubprocess">
+        <bpmn:extensionElements>
+          <camunda:executionListener event="start">
+            <camunda:script scriptFormat="javascript">execution.setVariable("internalCounter", execution.getVariable("internalCounter") + 1);</camunda:script>
+          </camunda:executionListener>
+        </bpmn:extensionElements>
+        <bpmn:outgoing>Flow_1x68efi</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:sequenceFlow id="Flow_1x68efi" sourceRef="StartSubprocess" targetRef="SettledByFileSignal" />
+      <bpmn:intermediateCatchEvent id="SettledByFileSignal" name="Settled by file">
+        <bpmn:extensionElements />
+        <bpmn:incoming>Flow_1x68efi</bpmn:incoming>
+        <bpmn:outgoing>Flow_1kwrs1l</bpmn:outgoing>
+        <bpmn:signalEventDefinition id="SignalEventDefinition_0neddus" signalRef="Signal_3iccvlu" />
+      </bpmn:intermediateCatchEvent>
+      <bpmn:sequenceFlow id="Flow_1kwrs1l" sourceRef="SettledByFileSignal" targetRef="StorePayment" />
+      <bpmn:endEvent id="EndSubprocess">
+        <bpmn:incoming>Flow_1tyq8kz</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_1tyq8kz" sourceRef="StorePayment" targetRef="EndSubprocess" />
+      <bpmn:scriptTask id="StorePayment" name="Store payment" scriptFormat="javascript">
+        <bpmn:incoming>Flow_1kwrs1l</bpmn:incoming>
+        <bpmn:outgoing>Flow_1tyq8kz</bpmn:outgoing>
+        <bpmn:script>var recordKey = "record-" + internalCounter;
+          execution.setVariable(recordKey, execution.getVariable("payload"));</bpmn:script>
+      </bpmn:scriptTask>
+    </bpmn:subProcess>
+    <bpmn:sequenceFlow id="Flow_0qys8sx" sourceRef="StartProcess" targetRef="InfiniteLoopRestart" />
+    <bpmn:endEvent id="EndProcess">
+      <bpmn:incoming>Flow_1ng43xu</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:boundaryEvent id="ConditionGT5" name="Greater than 5" cancelActivity="false" attachedToRef="InfiniteLoop">
+      <bpmn:outgoing>Flow_0c50agb</bpmn:outgoing>
+      <bpmn:conditionalEventDefinition id="ConditionalEventDefinition_0e9vp5e" camunda:variableName="internalCounter" camunda:variableEvents="update">
+        <bpmn:condition xsi:type="bpmn:tFormalExpression">${internalCounter&gt; 5}</bpmn:condition>
+      </bpmn:conditionalEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:boundaryEvent id="Timer3m" name="Every 3 minutes" cancelActivity="false" attachedToRef="InfiniteLoop">
+      <bpmn:outgoing>Flow_01a2tke</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerEventDefinition_15kg8k1">
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT3M</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:exclusiveGateway id="Gateway_0y7dpz9">
+      <bpmn:incoming>Flow_0c50agb</bpmn:incoming>
+      <bpmn:incoming>Flow_01a2tke</bpmn:incoming>
+      <bpmn:outgoing>Flow_18juvcp</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_0c50agb" sourceRef="ConditionGT5" targetRef="Gateway_0y7dpz9" />
+    <bpmn:sequenceFlow id="Flow_01a2tke" sourceRef="Timer3m" targetRef="Gateway_0y7dpz9" />
+    <bpmn:sequenceFlow id="Flow_18juvcp" sourceRef="Gateway_0y7dpz9" targetRef="FlushTask" />
+    <bpmn:scriptTask id="FlushTask" name="Flush file" scriptFormat="javascript">
+      <bpmn:incoming>Flow_18juvcp</bpmn:incoming>
+      <bpmn:outgoing>Flow_0352rj0</bpmn:outgoing>
+      <bpmn:script>for (var i = 1; i &lt; internalCounter; i++) {
+          var recordKey = "record-" + i;
+          var recordValue = execution.getVariable(recordKey);
+          console.log("Record " + i + ": " + recordValue);
+          execution.removeVariable(recordKey);
+        }</bpmn:script>
+    </bpmn:scriptTask>
+    <bpmn:exclusiveGateway id="InfiniteLoopRestart">
+      <bpmn:extensionElements>
+        <camunda:executionListener event="start">
+          <camunda:script scriptFormat="javascript">execution.setVariable("internalCounter", 0);</camunda:script>
+        </camunda:executionListener>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0352rj0</bpmn:incoming>
+      <bpmn:incoming>Flow_0qys8sx</bpmn:incoming>
+      <bpmn:outgoing>Flow_1t8cc1b</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_0352rj0" sourceRef="FlushTask" targetRef="InfiniteLoopRestart" />
+    <bpmn:sequenceFlow id="Flow_1ng43xu" sourceRef="InfiniteLoop" targetRef="EndProcess" />
+    <bpmn:sequenceFlow id="Flow_1t8cc1b" sourceRef="InfiniteLoopRestart" targetRef="InfiniteLoop" />
+  </bpmn:process>
+  <bpmn:signal id="Signal_3iccvlu" name="OperationSettledByFile" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="SettlementProcess">
+      <bpmndi:BPMNShape id="Gateway_0y7dpz9_di" bpmnElement="Gateway_0y7dpz9" isMarkerVisible="true">
+        <dc:Bounds x="550" y="345" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1ifkste_di" bpmnElement="FlushTask">
+        <dc:Bounds x="525" y="430" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartProcess">
+        <dc:Bounds x="152" y="159" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1yh5r7u_di" bpmnElement="InfiniteLoopRestart" isMarkerVisible="true">
+        <dc:Bounds x="235" y="152" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0grm8k1_di" bpmnElement="EndProcess">
+        <dc:Bounds x="862" y="172" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_100acmd_di" bpmnElement="InfiniteLoop" isExpanded="true">
+        <dc:Bounds x="340" y="90" width="470" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1ava8zo_di" bpmnElement="StartSubprocess">
+        <dc:Bounds x="380" y="172" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0kj4952_di" bpmnElement="SettledByFileSignal">
+        <dc:Bounds x="472" y="172" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="459" y="215" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1p6d2u7_di" bpmnElement="EndSubprocess">
+        <dc:Bounds x="732" y="172" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0gtfuc5_di" bpmnElement="StorePayment">
+        <dc:Bounds x="570" y="150" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1x68efi_di" bpmnElement="Flow_1x68efi">
+        <di:waypoint x="416" y="190" />
+        <di:waypoint x="472" y="190" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1kwrs1l_di" bpmnElement="Flow_1kwrs1l">
+        <di:waypoint x="508" y="190" />
+        <di:waypoint x="570" y="190" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1tyq8kz_di" bpmnElement="Flow_1tyq8kz">
+        <di:waypoint x="670" y="190" />
+        <di:waypoint x="732" y="190" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Event_17hba70_di" bpmnElement="ConditionGT5">
+        <dc:Bounds x="482" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="424" y="315" width="71" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0ep7a6c_di" bpmnElement="Timer3m">
+        <dc:Bounds x="642" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="670" y="315" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_0c50agb_di" bpmnElement="Flow_0c50agb">
+        <di:waypoint x="500" y="308" />
+        <di:waypoint x="500" y="370" />
+        <di:waypoint x="550" y="370" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_01a2tke_di" bpmnElement="Flow_01a2tke">
+        <di:waypoint x="660" y="308" />
+        <di:waypoint x="660" y="370" />
+        <di:waypoint x="600" y="370" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_18juvcp_di" bpmnElement="Flow_18juvcp">
+        <di:waypoint x="575" y="395" />
+        <di:waypoint x="575" y="430" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0352rj0_di" bpmnElement="Flow_0352rj0">
+        <di:waypoint x="525" y="470" />
+        <di:waypoint x="260" y="470" />
+        <di:waypoint x="260" y="202" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0qys8sx_di" bpmnElement="Flow_0qys8sx">
+        <di:waypoint x="188" y="177" />
+        <di:waypoint x="235" y="177" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1t8cc1b_di" bpmnElement="Flow_1t8cc1b">
+        <di:waypoint x="285" y="177" />
+        <di:waypoint x="340" y="177" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1ng43xu_di" bpmnElement="Flow_1ng43xu">
+        <di:waypoint x="810" y="190" />
+        <di:waypoint x="862" y="190" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

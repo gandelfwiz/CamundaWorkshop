@@ -48,6 +48,24 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+### Table of contents
+1. [Create a simple workflow](#step1)
+2. [Create a variable and pass from one task to another](#step2)
+3. [Add a gateway. Create collapsed and extended subprocess](#step3)
+4. [Loop on password validation. Boundary events](#step4)
+5. [Escalate and call external rest service](#step5)
+6. [Resiliency and Retry](#step6)\
+	I. [BPMN based](#step6-1)\
+	II. [Camunda engine based](#step6-1)
+7. [Kafka integration through sidecar pattern](#step7)
+8. [Transaction and compensation](#step8)
+9. [Cross-process interaction](#step9)
+10. [Service mesh integration](#step10)
+
+&nbsp;
+
+<div id='step1'/>
+
 ### **Step 1: create a simple workflow**
 
 &nbsp;
@@ -69,6 +87,8 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 5. Complete manually from task list the task.
 
 &nbsp;
+
+<div id='step2'/>
 
 ### **Step 2: create a variable and pass from one task to another**
 
@@ -112,6 +132,8 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step3'/>
+
 ### **Step 3: add a gateway. Create a collapsed subprocess and an extended one**
 
 &nbsp;
@@ -149,6 +171,7 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step4'/>
 
 ### **Step 4: loop on password validation. Boundary events**
 
@@ -211,6 +234,8 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 11. Once all configurations are done you can deploy and test the process. If you put a password different than 111111 after 3 times you will exit with the message `Password should be blocked`, instead if you put the 111111 password the process will be completed succesfully.
 
 &nbsp;
+
+<div id='step5'/>
 
 ### **Step 5: Escalate and call external rest service**
 
@@ -357,8 +382,13 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step6'/>
+
 ### **Step 6: Resilience and Retry**
 &nbsp;
+
+<div id='step6-1'/>
+
 #### **I. BPMN based**
 
 1. It is possible to implement in BPMN the retry. Change the diagram as follows:
@@ -410,6 +440,9 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 	```
 
 &nbsp;
+
+<div id='step6-2'/>
+
 #### **II. Camunda engine based**
 
 
@@ -440,6 +473,8 @@ For this reason the Camunda Engine approach is preferrable. If you Start back fr
 5. Deploy the process and test it. When you will put for 3 times the wrong password the system will run an automatic retry.
 
 &nbsp;
+
+<div id='step7'/>
 
 ### **Step 7: Kafka integration**
 
@@ -1050,6 +1085,8 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 
 &nbsp;
 
+<div id='step8'/>
+
 ### **Step 8: Transaction and Compensation**
 
 > A transaction is a set of tasks that should be executed consistently. If one task in the chain fails an action should do to compensate the previous actions done.
@@ -1159,3 +1196,121 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 
 &nbsp;
 
+<div id='step9'/>
+
+### **Step 9: Cross-process interaction**
+
+In Camunda is possible to call a process from another external process. The engine allows to handle parameter sending and to use event messages to interact with a loose coupling.
+
+1. Let's create an orchestration process for the two processes created until now and let's call it `Fuel delivery`
+
+![Step 9 Fuel dispensation process](images/delivery_step09_process.png)
+
+2. Let's use the call activity to call the processes already created. The idea of this process is that customer should authorize the card debit before to proceed with the fuel dispensation. Set up the `Authorize operation` to call a *BPMN element* and the called element will be `AuthorizationProcess`.
+
+3. Proceed at the same way with `Dispense Fuel` to call a *BPMN element* and the called element will be `DispensationProcess`. Remember that the process of dispensation requires the `errorRequired` variable as input parameter. You can provide it using *In mappings* section. Set up a source expression `${"2"}` with target variable errorRequired. In this way you can share just errorRequired with the called process.
+
+4. Configure the signal boundary event of `Dispense Fuel` setting the global signal reference equals to `OperationSettledByFile`
+
+5. Finally print a message in console with a groovy script in `Send communication to customer` task
+
+	```groovy
+	println "Communication to customer, payment will be settled by tomorrow"
+	```
+
+6. There is a way to couple loosely two processes using messages. Remember that a message end event can be correlated with one process a time, instead a signal can be correlate with as many as processes are waiting for it. If you deploy and run the `Fuel delivery` process you will see in console:
+
+	```
+	Reserve charge on credit card
+	Fuel is dispensed succesfully
+	Actualization is failed
+	Settlement is offline
+	Communication to customer, payment will be settled by tomorrow
+	```
+
+	The process catch the signal we have defined in `DispensationProcess` and proceed with the execution of boundary event.
+
+7. Let's see now how to settle up the payment in offline mode. Let's create a new process that we call `Infra day settlement`. The rule that we want to put in place is to flush in a file the payments switched to offline settlement every *n* record or every interval of time. Let's set up the following process.
+
+	![Step 9 Fuel dispensation process](images/settlement_step09_process.png)
+
+	and let's see how to realize this behavior using Camunda and Script tasks.
+
+8. In `InfiniteLoopRestart` exclusive join gateway setup a javascript
+
+	```javascript
+	execution.setVariable("internalCounter", 0);
+	```
+
+9. Configure the cardinality of the process to 7 and in initial event of subprocess add the following javascript:
+
+	```javascript
+	execution.setVariable("internalCounter", execution.getVariable("internalCounter") + 1);
+	```
+
+10. Configure the catch signal event to listen to the global signal reference `OperationSettledByFile`. 
+
+11. Set up the script task `Store payment` to set up a variable that is assigned to the current iteration assigning the payload as value:
+
+	```javascript
+	var recordKey = "record-" + internalCounter;
+          execution.setVariable(recordKey, execution.getVariable("payload"));
+	```
+
+12. The conditional boundary event will have the condition configure as follows: 
+	* Variable name: `internalCounter`
+	* Variable events: `update`
+	* Type: `Expression`
+	* Condition expression: `${internalCounter > 5}`
+
+	The timer boundary event will have a duration of `PT3M`.
+
+	The timer boundary non-interrupting event will have a cycle scheduled with the following *crontab* expression compliant to the *quartz* library requirements: `0 1/1 * * * ?`
+
+13. Finally set up the `Flush file` task with the following javascript:
+	```javascript
+	for (var i = 1; i < internalCounter; i++) {
+          var recordKey = "record-" + i;
+          var recordValue = execution.getVariable(recordKey);
+          console.log("Record " + i + ": " + recordValue);
+          execution.removeVariable(recordKey);
+        }
+	```
+
+14. Deploy and run the `Fuel delivery` process or the `DispensationProcess` with `errorRequired` equals to `2`. The 5th time the console will log:
+
+	```
+	Tentative #0
+	Reserve charge on credit card
+	Fuel is dispensed succesfully
+	Actualization is failed
+	Settlement is offline
+	Record 1: {"amount": 45}
+	Record 2: {"amount": 3}
+	Record 3: {"amount": 23}
+	Record 4: {"amount": 7}
+	Record 5: {"amount": 86}
+	Communication to customer, payment will be settled by tomorrow
+	```
+
+	You can see that signal is consumed by both the processes. `Fuel delivery` send communication to customer while `Infra day settlement` add the record to the basket to write to file. Note that timer non-interrupting boundary event works as a monitor and provides you periodically the messages received without interrupt the loop in progress:
+
+	```
+	Reserve charge on credit card
+	Fuel is dispensed succesfully
+	Actualization is failed
+	Settlement is offline
+	Reserve charge on credit card
+	Fuel is dispensed succesfully
+	Actualization is failed
+	Settlement is offline
+	11:45:25 - Received 2 records until now.
+	11:46:00 - Received 2 records until now.
+	11:47:15 - Received 2 records until now.
+	Record 1: {"amount": 81}
+	Record 2: {"amount": 62}
+	11:48:05 - Received 0 records until now.
+	11:49:20 - Received 0 records until now.
+	```
+
+&nbsp;
