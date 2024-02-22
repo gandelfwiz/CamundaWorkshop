@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_0xzkr80" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.20.0" modeler:executionPlatform="Camunda Platform" modeler:executionPlatformVersion="7.20.0">
+  <bpmn:process id="DispensationProcess" name="Fuel Dispensation" isExecutable="true" camunda:historyTimeToLive="180">
+    <bpmn:extensionElements>
+      <camunda:executionListener event="start">
+        <camunda:script scriptFormat="javascript">if (execution.getVariable("errorRequired") == null) {
+    execution.setVariable("errorRequired", 0);
+}</camunda:script>
+      </camunda:executionListener>
+    </bpmn:extensionElements>
+    <bpmn:startEvent id="Start">
+      <bpmn:extensionElements />
+      <bpmn:outgoing>Flow_10xu1wy</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="Flow_10xu1wy" sourceRef="Start" targetRef="TransactionSubProcess" />
+    <bpmn:endEvent id="End">
+      <bpmn:incoming>Flow_0rpx4e7</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_0rpx4e7" sourceRef="TransactionSubProcess" targetRef="End" />
+    <bpmn:transaction id="TransactionSubProcess">
+      <bpmn:incoming>Flow_10xu1wy</bpmn:incoming>
+      <bpmn:outgoing>Flow_0rpx4e7</bpmn:outgoing>
+      <bpmn:startEvent id="SubProcessStart">
+        <bpmn:outgoing>Flow_1g8cyc3</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:endEvent id="SubProcessEnd">
+        <bpmn:incoming>Flow_0nbxtyw</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_1g8cyc3" sourceRef="SubProcessStart" targetRef="ReserveCharge" />
+      <bpmn:sequenceFlow id="Flow_1f1u6fu" sourceRef="ReserveCharge" targetRef="DispenseFuel" />
+      <bpmn:sequenceFlow id="Flow_09ivgfe" sourceRef="DispenseFuel" targetRef="ActualCharge" />
+      <bpmn:sequenceFlow id="Flow_0nbxtyw" sourceRef="ActualCharge" targetRef="SubProcessEnd" />
+      <bpmn:boundaryEvent id="Event_0erb5du" attachedToRef="ActualCharge">
+        <bpmn:outgoing>Flow_0ogu0dz</bpmn:outgoing>
+        <bpmn:errorEventDefinition id="ErrorEventDefinition_09kvlod" errorRef="Error_019fyvi" camunda:errorCodeVariable="errorVar" camunda:errorMessageVariable="errorMessage" />
+      </bpmn:boundaryEvent>
+      <bpmn:sequenceFlow id="Flow_0ogu0dz" sourceRef="Event_0erb5du" targetRef="ActualizationCancellation" />
+      <bpmn:endEvent id="ActualizationCancellation" name="actualization failed">
+        <bpmn:incoming>Flow_0ogu0dz</bpmn:incoming>
+        <bpmn:cancelEventDefinition id="CancelEventDefinition_10kjem1" />
+      </bpmn:endEvent>
+      <bpmn:boundaryEvent id="CreditCompensation" attachedToRef="DispenseFuel">
+        <bpmn:compensateEventDefinition id="CompensateEventDefinition_06u23tt" />
+      </bpmn:boundaryEvent>
+      <bpmn:boundaryEvent id="DebitCompensation" attachedToRef="ReserveCharge">
+        <bpmn:compensateEventDefinition id="CompensateEventDefinition_0r0ncwe" />
+      </bpmn:boundaryEvent>
+      <bpmn:scriptTask id="ReserveCharge" name="Reserve Charge" scriptFormat="groovy">
+        <bpmn:incoming>Flow_1g8cyc3</bpmn:incoming>
+        <bpmn:outgoing>Flow_1f1u6fu</bpmn:outgoing>
+        <bpmn:script>println "Reserve charge on credit card"</bpmn:script>
+      </bpmn:scriptTask>
+      <bpmn:scriptTask id="CancelReservation" name="Cancel reservation" isForCompensation="true" scriptFormat="groovy">
+        <bpmn:script>if (execution.getVariable("dispensed") == null
+   || !execution.getVariable("dispensed")) {
+    println "Cancel reservation"
+}</bpmn:script>
+      </bpmn:scriptTask>
+      <bpmn:scriptTask id="DispenseFuel" name="Dispense fuel" scriptFormat="javascript">
+        <bpmn:extensionElements />
+        <bpmn:incoming>Flow_1f1u6fu</bpmn:incoming>
+        <bpmn:outgoing>Flow_09ivgfe</bpmn:outgoing>
+        <bpmn:script>var checkError = execution.getVariable("errorRequired");
+if ( errorRequired == "1" ) {
+    console.log('Dispenser is out of order');
+    throw new org.camunda.bpm.engine.delegate.BpmnError("dispenserError");
+} else {
+    console.log('Fuel is dispensed succesfully');
+}
+</bpmn:script>
+      </bpmn:scriptTask>
+      <bpmn:scriptTask id="ActualCharge" name="Actual charge" scriptFormat="javascript" camunda:resultVariable="scriptOutput">
+        <bpmn:extensionElements>
+          <camunda:executionListener event="start">
+            <camunda:script scriptFormat="javascript">execution.setVariable("dispensed", true);</camunda:script>
+          </camunda:executionListener>
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_09ivgfe</bpmn:incoming>
+        <bpmn:outgoing>Flow_0nbxtyw</bpmn:outgoing>
+        <bpmn:script>var checkError = execution.getVariable("errorRequired");
+if ( errorRequired == "2" ) {
+    console.log('Actualization is failed');
+    throw new org.camunda.bpm.engine.delegate.BpmnError("actualError");
+} else {
+    console.log('Card is debited successfully');
+}
+</bpmn:script>
+      </bpmn:scriptTask>
+      <bpmn:endEvent id="DispenserOutOfOrderCancellation" name="out of order">
+        <bpmn:incoming>Flow_050tblx</bpmn:incoming>
+        <bpmn:cancelEventDefinition id="CancelEventDefinition_0h0yvbc" />
+      </bpmn:endEvent>
+      <bpmn:boundaryEvent id="Event_1wghlj8" attachedToRef="DispenseFuel">
+        <bpmn:outgoing>Flow_050tblx</bpmn:outgoing>
+        <bpmn:errorEventDefinition id="ErrorEventDefinition_0ftsk2w" errorRef="Error_14ogvc4" camunda:errorCodeVariable="errorVar" camunda:errorMessageVariable="errorMessage" />
+      </bpmn:boundaryEvent>
+      <bpmn:sequenceFlow id="Flow_050tblx" sourceRef="Event_1wghlj8" targetRef="DispenserOutOfOrderCancellation" />
+      <bpmn:subProcess id="FileSettlement" name="Confirm settlement through file" isForCompensation="true">
+        <bpmn:startEvent id="Event_0wnnaet">
+          <bpmn:outgoing>Flow_1a0w1na</bpmn:outgoing>
+        </bpmn:startEvent>
+        <bpmn:endEvent id="OperationSettledByFileSignal">
+          <bpmn:extensionElements>
+            <camunda:executionListener event="start">
+              <camunda:script scriptFormat="javascript">execution.setVariable("payload", '{"amount": ' + Math.round(Math.random()*100) + '}');</camunda:script>
+            </camunda:executionListener>
+          </bpmn:extensionElements>
+          <bpmn:incoming>Flow_0z4l2d4</bpmn:incoming>
+          <bpmn:signalEventDefinition id="SignalEventDefinition_0w3vcft" signalRef="Signal_0k7ofsl">
+            <bpmn:extensionElements>
+              <camunda:in variables="all" />
+            </bpmn:extensionElements>
+          </bpmn:signalEventDefinition>
+        </bpmn:endEvent>
+        <bpmn:scriptTask id="AppendToFile" name="Settlement Offline" scriptFormat="groovy">
+          <bpmn:incoming>Flow_1a0w1na</bpmn:incoming>
+          <bpmn:outgoing>Flow_0z4l2d4</bpmn:outgoing>
+          <bpmn:script>println "Settlement is offline"</bpmn:script>
+        </bpmn:scriptTask>
+        <bpmn:sequenceFlow id="Flow_1a0w1na" sourceRef="Event_0wnnaet" targetRef="AppendToFile" />
+        <bpmn:sequenceFlow id="Flow_0z4l2d4" sourceRef="AppendToFile" targetRef="OperationSettledByFileSignal" />
+      </bpmn:subProcess>
+      <bpmn:association id="Association_0oz6xn1" associationDirection="One" sourceRef="CreditCompensation" targetRef="FileSettlement" />
+      <bpmn:association id="Association_0gcc1v3" associationDirection="One" sourceRef="DebitCompensation" targetRef="CancelReservation" />
+    </bpmn:transaction>
+    <bpmn:boundaryEvent id="CancellationCatcher" attachedToRef="TransactionSubProcess">
+      <bpmn:outgoing>Flow_00tuh71</bpmn:outgoing>
+      <bpmn:cancelEventDefinition id="CancelEventDefinition_14momui" />
+    </bpmn:boundaryEvent>
+    <bpmn:sequenceFlow id="Flow_00tuh71" sourceRef="CancellationCatcher" targetRef="CompensateEvent" />
+    <bpmn:endEvent id="CompensateEvent">
+      <bpmn:incoming>Flow_00tuh71</bpmn:incoming>
+      <bpmn:compensateEventDefinition id="CompensateEventDefinition_1nrqcoe" activityRef="TransactionSubProcess" />
+    </bpmn:endEvent>
+    <bpmn:textAnnotation id="TextAnnotation_0rrc1rb">
+      <bpmn:text>Since it is not possible to remove the fuel from car, the transaction will be completed offline</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_09fjpc5" associationDirection="None" sourceRef="FileSettlement" targetRef="TextAnnotation_0rrc1rb" />
+  </bpmn:process>
+  <bpmn:error id="Error_14ogvc4" name="DispenserError" errorCode="dispenserError" camunda:errorMessage="Dispenser is out of order" />
+  <bpmn:signal id="Signal_075r7f4" name="OperationSettledByFile2" />
+  <bpmn:message id="Message_1d4rlqu" name="OperationSettledByFile" />
+  <bpmn:error id="Error_019fyvi" name="ActualError" errorCode="actualError" camunda:errorMessage="Actualization is failed" />
+  <bpmn:signal id="Signal_0k7ofsl" name="OperationSettledByFile" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="DispensationProcess">
+      <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="Start">
+        <dc:Bounds x="192" y="162" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1uvon8q_di" bpmnElement="End">
+        <dc:Bounds x="1062" y="152" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1sf4k8u_di" bpmnElement="TransactionSubProcess" isExpanded="true">
+        <dc:Bounds x="280" y="80" width="750" height="500" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0rfzqy5_di" bpmnElement="SubProcessStart">
+        <dc:Bounds x="320" y="162" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0j73sxd_di" bpmnElement="SubProcessEnd">
+        <dc:Bounds x="892" y="162" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1u5b1ke_di" bpmnElement="ActualizationCancellation">
+        <dc:Bounds x="872" y="282" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="861" y="325" width="62" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_12swk3a_di" bpmnElement="ReserveCharge">
+        <dc:Bounds x="410" y="140" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_09xm6r3_di" bpmnElement="CancelReservation">
+        <dc:Bounds x="390" y="270" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_09ibszy_di" bpmnElement="DispenseFuel">
+        <dc:Bounds x="570" y="140" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1hm9vkb_di" bpmnElement="ActualCharge">
+        <dc:Bounds x="730" y="140" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1icfjrc_di" bpmnElement="DispenserOutOfOrderCancellation">
+        <dc:Bounds x="702" y="282" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="691" y="325" width="58" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0l104ss_di" bpmnElement="FileSettlement">
+        <dc:Bounds x="730" y="360" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0zj2rk2_di" bpmnElement="Event_1wghlj8">
+        <dc:Bounds x="632" y="202" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0dh69nu_di" bpmnElement="DebitCompensation">
+        <dc:Bounds x="422" y="202" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1qyearu_di" bpmnElement="CreditCompensation">
+        <dc:Bounds x="582" y="202" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_11y4nok_di" bpmnElement="Event_0erb5du">
+        <dc:Bounds x="782" y="202" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1g8cyc3_di" bpmnElement="Flow_1g8cyc3">
+        <di:waypoint x="356" y="180" />
+        <di:waypoint x="410" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1f1u6fu_di" bpmnElement="Flow_1f1u6fu">
+        <di:waypoint x="510" y="180" />
+        <di:waypoint x="570" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_09ivgfe_di" bpmnElement="Flow_09ivgfe">
+        <di:waypoint x="670" y="180" />
+        <di:waypoint x="730" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0nbxtyw_di" bpmnElement="Flow_0nbxtyw">
+        <di:waypoint x="830" y="180" />
+        <di:waypoint x="892" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0ogu0dz_di" bpmnElement="Flow_0ogu0dz">
+        <di:waypoint x="800" y="238" />
+        <di:waypoint x="800" y="300" />
+        <di:waypoint x="872" y="300" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_050tblx_di" bpmnElement="Flow_050tblx">
+        <di:waypoint x="650" y="238" />
+        <di:waypoint x="650" y="300" />
+        <di:waypoint x="702" y="300" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_0oz6xn1_di" bpmnElement="Association_0oz6xn1">
+        <di:waypoint x="600" y="238" />
+        <di:waypoint x="600" y="400" />
+        <di:waypoint x="730" y="400" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_0gcc1v3_di" bpmnElement="Association_0gcc1v3">
+        <di:waypoint x="440" y="238" />
+        <di:waypoint x="440" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Event_036yoej_di" bpmnElement="CompensateEvent">
+        <dc:Bounds x="442" y="642" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="TextAnnotation_0rrc1rb_di" bpmnElement="TextAnnotation_0rrc1rb">
+        <dc:Bounds x="780" y="500" width="228" height="58" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1vjv1rj_di" bpmnElement="CancellationCatcher">
+        <dc:Bounds x="442" y="562" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_10xu1wy_di" bpmnElement="Flow_10xu1wy">
+        <di:waypoint x="228" y="180" />
+        <di:waypoint x="280" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0rpx4e7_di" bpmnElement="Flow_0rpx4e7">
+        <di:waypoint x="1030" y="170" />
+        <di:waypoint x="1062" y="170" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_00tuh71_di" bpmnElement="Flow_00tuh71">
+        <di:waypoint x="460" y="598" />
+        <di:waypoint x="460" y="642" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_09fjpc5_di" bpmnElement="Association_09fjpc5">
+        <di:waypoint x="797" y="440" />
+        <di:waypoint x="823" y="500" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1fgfkbc">
+    <bpmndi:BPMNPlane id="BPMNPlane_0d6boy7" bpmnElement="FileSettlement">
+      <bpmndi:BPMNShape id="Event_0wnnaet_di" bpmnElement="Event_0wnnaet">
+        <dc:Bounds x="152" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0cvc3br_di" bpmnElement="OperationSettledByFileSignal">
+        <dc:Bounds x="392" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_08ooicj_di" bpmnElement="AppendToFile">
+        <dc:Bounds x="240" y="80" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1a0w1na_di" bpmnElement="Flow_1a0w1na">
+        <di:waypoint x="188" y="120" />
+        <di:waypoint x="240" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0z4l2d4_di" bpmnElement="Flow_0z4l2d4">
+        <di:waypoint x="340" y="120" />
+        <di:waypoint x="392" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

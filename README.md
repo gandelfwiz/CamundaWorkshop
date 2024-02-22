@@ -503,50 +503,7 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 		</plugin>
 		```
 
-3. Add avro schemas in src/main/resources/avro and remember to register them into Kafka Schema Registry. The avro object will be created automatically in `target/generated-sources` by the `maven-avro-plugin`.
-	Avro schema is the contract between Camunda and Other External service.
-	The json that Camunda send for a **request** to an external is defined in the project as follows:
-
-	`CamundaRequestEvent`
-	```json
-	{
-		"workflowId": "da2fd17b-0d0f-4d00-b88e-13d0361073c1",
-		"taskId": "7055fb17-b008-4142-98f2-dcf9f4d13dc2",
-		"feedbackRequired": true,
-		"feedback": {
-			"feedbackEvent": "AuthorizedByOtherDevice",
-			"feedbackType": "MESSAGE"
-		},
-		"data": {
-			"author": "gandelfwiz"
-		}
-	}
-	```
-	The idea is that Camunda provides keys of its process and ask for a feedback if the process subsequently will wait it. Additional properties can be put in `data` object that represent the business/audit data. The property `feedbackRequired` will communicate to the external service whether a feedback is expected or not.
-
-	The feedback event will be similar, but will add the result of external service.
-
-	`CamundaFeedbackEvent`
-	```json
-	{
-		"workflowId": "7b17db81-d0d0-11ee-a84d-581cf8936878",
-		"taskId": "7055fb17-b008-4142-98f2-dcf9f4d13dc2",
-		"result": "OK",
-		"timestamp": "2023-01-23T01:03:10",
-		"componentName": "curl",
-		"feedback": {
-			"feedbackEvent": "AuthorizedByOtherDevice",
-			"feedbackType": "MESSAGE"
-		},
-		"data": {
-			"author": "gandelfwiz"
-		}
-	}
-	```
-
-	Obviously the contract is defined arbitrarily for the scope of this project. It is possible to create any event based on the needs and rules that in a project are defined.
-
-	The following files and schemas should be added:
+3. Add avro schemas in src/main/resources/avro. The following file and schema should be added:
 
 	File: `camunda_request.avsc`
 	```json
@@ -697,8 +654,8 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 			  url: http://localhost:8081
 			  #ssl:
 				#keystore:
-				# location: src/main/resources/cert.jks
-				# password: changeit
+				#  location: src/main/resources/cert.jks
+				#  password: changeit
 				#truststore:
 				#  location: src/main/resources/cert.jks
 				#  password: changeit
@@ -745,14 +702,7 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 
 		}			
 		```
-	* `service` package with java class `KafkaService` that:
-		* implement kafka publishing
-		* implement the REST call to Camunda for the feedback. The REST API used are: 
-			- POST /message
-			- POST /signal
-		* implement 2 KafkaListeners: one for feedback and one to implement a mock of 
-			camunda request. The mock will wait 5 seconds and then will publish the feedback
-			that the kafka listener of feedback will forward to Camunda using Rest API
+	* `service` package with java class `KafkaService`
 
 		```java
 		@Service
@@ -885,9 +835,7 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 		}
 		```
 
-	* in sidecar package add the following configuration class that:
-		* make avro object jackson-compliant
-		* define rest template with custom object mapper
+	* in sidecar package add the following configuration class:
 
 		```java
 		@Configuration
@@ -946,98 +894,98 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 		```
 	* Create the model to call Camunda under model.camunda. The models were created using the swagger editor starting from [OpenApi](https://docs.camunda.org/rest/camunda-bpm-platform/7.20/) definition of Camunda.
 
-		```java
-		@Data
-		public class AtomLink {
-			private String rel = null;
-			private String href = null;
-			private String method = null;
-		}
-		@Data
-		@Builder
-		public class CorrelationMessageDto {
-			private String messageName;
-			private String businessKey;
-			private String tenantId;
-			private Boolean withoutTenantId = false;
-			private String processInstanceId;
-			private Map<String, VariableValueDto> correlationKeys;
-			private Map<String, VariableValueDto> localCorrelationKeys;
-			private Map<String, VariableValueDto> processVariables;
-			private Map<String, VariableValueDto> processVariablesLocal;
-			private Boolean all = false;
-			private Boolean resultEnabled = false;
-			private Boolean variablesInResultEnabled = false;
-		}
-		@Data
-		public class ExecutionDto {
-			private String id;
-			private String processInstanceId;
-			private Boolean ended;
-			private String tenantId;
-		}
-		@Data
-		public class MessageCorrelationResultWithVariableDto {
-			/**
-			* Indicates if the message was correlated to a message start event or an  intermediate message catching event. In the first case, the resultType is  `ProcessDefinition` and otherwise `Execution`.
-			*/
-			@AllArgsConstructor
-			public enum ResultTypeEnum {
-				EXECUTION("Execution"),
-				PROCESSDEFINITION("ProcessDefinition");
+	```java
+	@Data
+	public class AtomLink {
+		private String rel = null;
+		private String href = null;
+		private String method = null;
+	}
+	@Data
+	@Builder
+	public class CorrelationMessageDto {
+		private String messageName;
+		private String businessKey;
+		private String tenantId;
+		private Boolean withoutTenantId = false;
+		private String processInstanceId;
+		private Map<String, VariableValueDto> correlationKeys;
+		private Map<String, VariableValueDto> localCorrelationKeys;
+		private Map<String, VariableValueDto> processVariables;
+		private Map<String, VariableValueDto> processVariablesLocal;
+		private Boolean all = false;
+		private Boolean resultEnabled = false;
+		private Boolean variablesInResultEnabled = false;
+	}
+	@Data
+	public class ExecutionDto {
+		private String id;
+		private String processInstanceId;
+		private Boolean ended;
+		private String tenantId;
+	}
+	@Data
+	public class MessageCorrelationResultWithVariableDto {
+		/**
+		* Indicates if the message was correlated to a message start event or an  intermediate message catching event. In the first case, the resultType is  `ProcessDefinition` and otherwise `Execution`.
+		*/
+		@AllArgsConstructor
+		public enum ResultTypeEnum {
+			EXECUTION("Execution"),
+			PROCESSDEFINITION("ProcessDefinition");
 
-				private String value;
+			private String value;
 
-				@Override
-				@JsonValue
-				public String toString() {
-					return String.valueOf(value);
-				}
-
-				@JsonCreator
-				public static ResultTypeEnum fromValue(String text) {
-					for (ResultTypeEnum b : ResultTypeEnum.values()) {
-						if (String.valueOf(b.value).equals(text)) {
-							return b;
-						}
-					}
-					return null;
-				}
+			@Override
+			@JsonValue
+			public String toString() {
+				return String.valueOf(value);
 			}
 
-			private ResultTypeEnum resultType = null;
-			private ProcessInstanceDto processInstance = null;
-			private ExecutionDto execution = null;
-			private Map<String, VariableValueDto> variables = null;
+			@JsonCreator
+			public static ResultTypeEnum fromValue(String text) {
+				for (ResultTypeEnum b : ResultTypeEnum.values()) {
+					if (String.valueOf(b.value).equals(text)) {
+						return b;
+					}
+				}
+				return null;
+			}
+		}
 
-		}
-		@Data
-		public class ProcessInstanceDto {
-			private String id;
-			private String definitionId;
-			private String businessKey;
-			private String caseInstanceId;
-			private Boolean ended;
-			private Boolean suspended;
-			private String tenantId;
-			private List<AtomLink> links;
-		}
-		@Data
-		@Builder
-		public class SignalDto {
-			private String name;
-			private String executionId;
-			private Map<String, VariableValueDto> variables;
-			private String tenantId;
-			private Boolean withoutTenantId;
-		}
-		@Data
-		public class VariableValueDto {
-			private Object value;
-			private String type;
-			private Map<String, Object> valueInfo;
-		}
-		```
+		private ResultTypeEnum resultType = null;
+		private ProcessInstanceDto processInstance = null;
+		private ExecutionDto execution = null;
+		private Map<String, VariableValueDto> variables = null;
+
+	}
+	@Data
+	public class ProcessInstanceDto {
+		private String id;
+		private String definitionId;
+		private String businessKey;
+		private String caseInstanceId;
+		private Boolean ended;
+		private Boolean suspended;
+		private String tenantId;
+		private List<AtomLink> links;
+	}
+	@Data
+	@Builder
+	public class SignalDto {
+		private String name;
+		private String executionId;
+		private Map<String, VariableValueDto> variables;
+		private String tenantId;
+		private Boolean withoutTenantId;
+	}
+	@Data
+	public class VariableValueDto {
+		private Object value;
+		private String type;
+		private Map<String, Object> valueInfo;
+	}
+	```
 
 6. You can check if everything works well running the application
 
@@ -1099,3 +1047,115 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 	```
 
 11. To test the timer you should set up the payload javascript property `feedbackRequired` to false. Deploy, run the process and wait. An incident will be created.
+
+&nbsp;
+
+### **Step 8: Transaction and Compensation**
+
+> A transaction is a set of tasks that should be executed consistently. If one task in the chain fails an action should do to compensate the previous actions done.
+	BPMN offers the possibility to explicitly declare this behavior with specific elements.\
+	In our example we want to create a process of a Fuel Dispenser. The steps to dispense fuel are the following:\
+	&nbsp;&nbsp;&nbsp;&nbsp;1. The machine reserve the charge on credit card of customer\
+	&nbsp;&nbsp;&nbsp;&nbsp;2. Then the fuel dispenser provide the fuel as requested\
+	&nbsp;&nbsp;&nbsp;&nbsp;3. Finally the machine actualizes the charge.\
+	In this scenario we have to decide what happens when the second step or the third one fails.\
+	In case of *fuel dispenser out of order*, we have already processed the step 1, so we have to cancel the charge reservation.\
+	In case of *issue in actualization of reservation*, we can't remove the charge reservation since the fuel is already dispensed and can't be received back. So the only compensation action we can do is to send the payment to the customer credit card issuer through a file at the end of day.\
+	This is a common scenario that in processes are in place and like in a SAGA pattern we have to compensate actions already done.	So let's see in detail how to implement this behavior.
+
+1. Create a new `dispensation` process as follows:
+
+	![Step 8 Fuel dispensation process](images/dispensation_step08_main_process.png)
+
+	and the subprocess `Confirm settlement through file` as follows:
+
+	![Step 8 Fuel dispensation compensation subprocess](images/dispensation_step08_sub_process.png)
+
+	Note that to clarify the type of compensation a comment is added in the main process. Since usually compensation is an opposite action than the original, in this case is better to clarify that in case of compensation of fuel dispensed we can just conclude in different way the process.
+
+2. Setup the task `Reserve charge` with the groovy script `println "Reserve charge on credit card"`
+
+3. In order to test the different compensation we want to receive a variable when the process is started. The variable will be used as a flag in the process. Let's call the variable `errorRequired` as a string that can have the value `0` that is OK, `1` to fail the fuel dispensation, `2` to fail the charge actualization. To avoid that process fails when the variable is not set, let's define a default value for the variable equal to `0`. Let's do this selecting the background of the process and adding an execution listener for *start* event type with a javascript as follows:
+
+	```javascript
+	if (execution.getVariable("errorRequired") == null) {
+		execution.setVariable("errorRequired", 0);
+	}
+	```
+
+	In this way we can implement the flag logic inside the script tasks. Add the following javascript to `Dispense fuel` implementation:
+
+	```javascript
+	var checkError = execution.getVariable("errorRequired");
+	if ( errorRequired == "1" ) {
+		console.log('Dispenser is out of order');
+		throw new org.camunda.bpm.engine.delegate.BpmnError("dispenserError");
+	} else {
+		console.log('Fuel is dispensed succesfully');
+	}
+	```
+
+	and the following to `Actual charge`:
+
+	```javascript
+	var checkError = execution.getVariable("errorRequired");
+	if ( errorRequired == "2" ) {
+		console.log('Actualization is failed');
+		throw new org.camunda.bpm.engine.delegate.BpmnError("actualError");
+	} else {
+		console.log('Card is debited successfully');
+	}
+	```
+4. Before to implement the compensation tasks there is a thing to keep in mind: in case of fuel is dispensed it is not possible cancel the reservation anymore, but it should proceed with the settlement by file. For this reason we have to handle another variable that we set to true after the fuel is dispensed. Since the execution listener for `end` event type is executed although the task fails, we will intercept the execution listener `start` event type with the javascript 
+	```javascript
+	execution.setVariable("dispensed", true);
+	```
+	In this way the compensation task `Cancel reservation` will print the compensation just in case dispensed is not defined or is false. Following a groovy script for implementation:
+	```groovy
+	if (execution.getVariable("dispensed") == null
+		|| !execution.getVariable("dispensed")) {
+			println "Cancel reservation"
+	}
+	```
+
+5. In `Confirm settlement by file` subprocess implement `Settlement offline` script as groovy script: 
+
+	```groovy
+	println "Settlement is offline"
+	```
+
+6. Set up the signal end event selecting the option `Propagate all variables` and adding an execution listener as *start* event type with the following javascript:
+
+	```javascript
+	execution.setVariable("payload", '{"amount": ' + Math.round(Math.random()*100) + '}');
+	```
+
+	In this way the signal event will send to all catchers process the variable `payload` where a random amount is specified.
+
+7. Deploy the process and run it. In console you should read:
+
+	```
+	Reserve charge on credit card
+	Fuel is dispensed succesfully
+	Card is debited successfully
+	```
+
+	Then try to rerun it setting `errorRequired` equals to 1. In console you can read:
+
+	```
+	Reserve charge on credit card
+	Dispenser is out of order
+	Cancel reservation
+	```
+
+	Then finally try to rerun it setting `errorRequired` equals to 2. In console you can read:
+
+	```
+	Reserve charge on credit card
+	Fuel is dispensed succesfully
+	Actualization is failed
+	Settlement is offline
+	```
+
+&nbsp;
+
