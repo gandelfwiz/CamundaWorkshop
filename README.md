@@ -48,6 +48,16 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+### Table of contents
+1. [Create a simple workflow](#step1)
+2. [Create a variable and pass from one task to another](#step2)
+3. [Add a gateway. Create collapsed and extended subprocess](#step3)
+4. [Loop on password validation. Boundary events](#step4)
+
+&nbsp;
+
+<div id='step1'/>
+
 ### **Step 1: create a simple workflow**
 
 &nbsp;
@@ -69,6 +79,8 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 5. Complete manually from task list the task.
 
 &nbsp;
+
+<div id='step2'/>
 
 ### **Step 2: create a variable and pass from one task to another**
 
@@ -112,6 +124,8 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step3'/>
+
 ### **Step 3: add a gateway. Create a collapsed subprocess and an extended one**
 
 &nbsp;
@@ -149,6 +163,7 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 &nbsp;
 
+<div id='step4'/>
 
 ### **Step 4: loop on password validation. Boundary events**
 
@@ -156,7 +171,7 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 
 1. Change the process as follows:
 
-	![Step 3 gateway: Add gateway and 2 subprocesses](images/authorization_step4_boundaryevents.png)
+	![Step 4 gateway: Add loop and boundary events](images/authorization_step4_boundaryevents.png)
 
 2. Let's configure the task `Ask for password` with a generated task forms with just one field that we name password. Type is string
 
@@ -209,3 +224,7 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 	```
 
 11. Once all configurations are done you can deploy and test the process. If you put a password different than 111111 after 3 times you will exit with the message `Password should be blocked`, instead if you put the 111111 password the process will be completed succesfully.
+
+&nbsp;
+
+<div id='step5'/>
