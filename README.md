@@ -60,7 +60,6 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 7. [Kafka integration through sidecar pattern](#step7)
 8. [Transaction and compensation](#step8)
 9. [Cross-process interaction](#step9)
-10. [Service mesh integration](#step10)
 
 &nbsp;
 
