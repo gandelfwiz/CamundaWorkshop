@@ -4,6 +4,7 @@ kafka:
 
 spring:
   kafka:
+    # ING TPA Kafka environment
     bootstrap-servers: localhost:9092
     properties:
       schema:
@@ -21,6 +22,11 @@ spring:
       group-id: camunda-sidecar-local
       auto-offset-reset: earliest
     auto.register.schema: false
+  cloud:
+    consul:
+      service-registry:
+        auto-registration:
+          enabled: false
 camunda:
   server:
     url: http://localhost:8080/engine-rest

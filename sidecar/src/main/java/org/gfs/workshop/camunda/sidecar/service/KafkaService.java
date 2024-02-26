@@ -93,7 +93,7 @@ public class KafkaService {
      *
      * @param feedbackEvent feedback event for Camunda received from topic
      */
-    @KafkaListener(topics = "${kafka.feedback-topic}")
+    @KafkaListener(topics = "${kafka.feedback-topic}", autoStartup = "${kafka.autostartup}")
     public void feedbackHandler(CamundaFeedbackEvent feedbackEvent) {
         log.info("Received message {}", feedbackEvent);
         if (Objects.nonNull(feedbackEvent.getFeedback())) {
@@ -113,7 +113,7 @@ public class KafkaService {
      *
      * @param requestEvent intercept request coming from camunda
      */
-    @KafkaListener(topics = "${kafka.request-topic}")
+    @KafkaListener(topics = "${kafka.request-topic}", autoStartup = "${kafka.autostartup}")
     public void mockRequestHandler(CamundaRequestEvent requestEvent) {
         log.info("** MOCK SERVICE ** - Received message {}", requestEvent);
         CompletableFuture.runAsync(() -> {

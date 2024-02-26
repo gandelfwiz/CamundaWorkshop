@@ -56,10 +56,11 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 5. [Escalate and call external rest service](#step5)
 6. [Resiliency and Retry](#step6)\
 	I. [BPMN based](#step6-1)\
-	II. [Camunda engine based](#step6-2)
+	II. [Camunda engine based](#step6-1)
 7. [Kafka integration through sidecar pattern](#step7)
 8. [Transaction and compensation](#step8)
 9. [Cross-process interaction](#step9)
+10. [Service mesh integration](#step10)
 
 &nbsp;
 
@@ -1023,13 +1024,13 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 
 6. You can check if everything works well running the application
 
-	```dos
+	```s
 	mvn spring-boot:run '-Dspring-boot.run.arguments="--server.port=8500"'
 	```	
 
 	and calling it using these curls:
 
-	```dos
+	```s
 	curl -X POST http://localhost:8500/kafka/events/camunda/publishing --data-raw "{\"workflowId\": \"da2fd17b-0d0f-4d00-b88e-13d0361073c1\",\"taskId\": \"7055fb17-b008-4142-98f2-dcf9f4d13dc2\", \"feedbackRequired\": true, \"feedback\":{\"feedbackEvent\":\"AuthorizedByOtherDevice\",\"feedbackType\":\"SIGNAL\"},\"data\": {\"author\":\"gandelfwiz\"}}" -H "Content-Type: application/json"
 
 	curl -X POST http://localhost:8500/kafka/events/feedback/publishing --data-raw "{\"workflowId\": \"7b17db81-d0d0-11ee-a84d-581cf8936878\",\"taskId\": \"7055fb17-b008-4142-98f2-dcf9f4d13dc2\",\"result\": \"OK\",\"timestamp\": \"2023-01-23T01:03:10\",\"componentName\":\"curl\",\"feedback\":{\"feedbackEvent\":\"AuthorizedByOtherDevice\",\"feedbackType\":\"MESSAGE\"},\"data\": {\"author\": \"gandelfwiz\"}}" -H "Content-Type: application/json"
@@ -1313,3 +1314,119 @@ In Camunda is possible to call a process from another external process. The engi
 	```
 
 &nbsp;
+
+<div id='step10'/>
+
+### **Step 10: Service mesh integration**
+>In order to integrate Camunda with a service mesh, to keep the technology independency you can create a sidecar that handle registrations and security policies and communicate in localhost with Camunda. 
+
+For this workshop we make it more simple. We implement a simple proxy endpoint in our sidecar that when called forward the request to Camunda exactly like a sidecar without the security part.
+
+1) Just create the class `CamundaForwarder` with the following endpoint:
+
+	```java
+	@Controller
+	@RequestMapping("/camunda")
+	@RequiredArgsConstructor
+	public class CamundaForwarder {
+		private final RestTemplate restTemplate;
+
+		@Value("${camunda.server.url}")
+		private String camundaServerUrl;
+
+		@RequestMapping(value = "/**", method = {
+				RequestMethod.GET, RequestMethod.DELETE, RequestMethod.POST, RequestMethod.PUT, RequestMethod.PATCH
+		})
+		public ResponseEntity<?> proxyCamundaRestApi(@RequestBody(required = false) String requestBody,
+														HttpServletRequest request) {
+			String targetUrl = camundaServerUrl +
+					"/" + Arrays.stream(request.getRequestURI().split("/"))
+					.skip(2)
+					.collect(Collectors.joining("/"));
+			// remove headers else would be duplicated
+			ResponseEntity<Object> response = restTemplate.exchange(targetUrl,
+					HttpMethod.valueOf(request.getMethod()),
+					new HttpEntity<>(requestBody),
+					Object.class);
+			return new ResponseEntity<>(response.getBody(), new HttpHeaders(), response.getStatusCode());
+
+		}
+	}
+	```
+
+2) Call the following endpoint:
+	```s
+	curl http://localhost:8500/camunda/history/incident
+	```
+
+	The sidecar will return the response from Camunda.
+
+3) Now stop the sidecar and rerun it with the following command:
+
+	```s
+	mvn spring-boot:run '-Dspring-boot.run.arguments="--server.port=0"'
+	```
+
+	In this case the port is random and so you can't predict where you have to call the service. In a service mesh environment not just the port isn't predictable, but also the url can be unpredictable.
+
+4) Let's try to create quickly a service discovery to find our service. If all services in network are linked to a service discovery you will have the service mesh. For our experiment download the binary of consul from this page: https://developer.hashicorp.com/consul/install and paste it in *consul/* subfolder
+
+5) Unzip the archive and from command line run:
+
+	```s
+	consul agent -dev
+	```
+
+	This command runs a basic service discovery provided by consul, the option -dev create just one node that can run in localhost.
+
+6) Now change the sidecar solution as follows to integrate in sidecar with spring cloud the consul client:
+	* add to `pom.xml` the following dependency:
+
+	```xml
+	<dependency>
+		<groupId>org.springframework.cloud</groupId>
+		<artifactId>spring-cloud-starter-consul-discovery</artifactId>
+		<version>4.1.0</version>
+	</dependency>
+	```
+
+	* add to application.yaml the following properties:
+
+	```yaml
+	spring:
+	  cloud:
+		consul:
+		host: localhost
+		port: 8500
+		discovery:
+			enabled: true
+			register: true
+			deregister: true
+			instance-id: ${spring.application.name}:${vcap.application.instance_id:${spring.application.instance_id:${random.value}}}
+			heartbeat:
+			  enabled: true
+			  ttl: 5s
+	  application:
+	    name: CamundaSidecar
+	```
+
+	* add to application.yaml in test folder the following properties:
+
+	```yaml
+	spring:
+	  cloud:
+		consul:
+		  service-registry:
+			auto-registration:
+            enabled: false
+	```
+
+7) Start the sidecar application like in step #3 with port 0
+
+8) Open your browser and look for http://localhost:8500/v1/health/service/CamundaSidecar. Search `port` and you can find the port to call. Let's suppose it's `62310` you can query camunda calling your sidecar with the following curl:
+
+	```s
+	curl http://localhost:62310/camunda/process-definition
+	```
+
+This exercise clarifies how the sidecar can integrate Camunda in service mesh. The changes you applied to the sidecar to activate and register the service to service discovery couldn't be applied to Camunda unless you don't embed Camunda libraries in your application creating a strong technology dependency between Camunda and service mesh integration implementation.

@@ -1,0 +1,1 @@
+consul agent -dev -config-file=config.json
