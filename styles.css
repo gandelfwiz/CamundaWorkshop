@@ -1,0 +1,49 @@
+body {
+    background-color: white;
+    color: black;
+}
+
+.container {
+    width: 80%;
+    margin: auto;
+}
+
+.title {
+    color: orange;
+}
+
+.input-field {
+    margin-bottom: 10px;
+}
+
+.input-field input[type="text"],
+.input-field input[type="password"],
+.input-field select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-sizing: border-box;
+}
+
+.button {
+    background-color: orange;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.button:hover {
+    background-color: #ff7f00;
+}
+
+.alert {
+    background-color: #f2dede;
+    color: #a94442;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ebccd1;
+    border-radius: 5px;
+}

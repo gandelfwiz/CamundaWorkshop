@@ -9,6 +9,15 @@ spring:
       schema:
         registry:
           url: http://localhost:8081
+          ssl:
+            keystore:
+              location: src/main/resources/cert.jks
+              password: publicpass
+            truststore:
+              location: src/main/resources/cert.jks
+              password: publicpass
+            key:
+              password: publicpass
       spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
       spring.deserializer.value.delegate.class: io.confluent.kafka.serializers.KafkaAvroDeserializer
       specific.avro.reader: true

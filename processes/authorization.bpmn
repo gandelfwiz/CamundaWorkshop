@@ -166,7 +166,7 @@ JSON.stringify(payload);</camunda:script>
       </bpmn:boundaryEvent>
       <bpmn:endEvent id="SendPasswordIsValid" name="password is valid">
         <bpmn:incoming>Flow_02u73l5</bpmn:incoming>
-        <bpmn:messageEventDefinition id="MessageEventDefinition_16yf9q2" messageRef="Message_0dfqafp" camunda:expression="${execution.getProcessEngineServices().getRuntimeService().createMessageCorrelation(&#34;PasswordIsValid&#34;).correlateWithResult()}" />
+        <bpmn:messageEventDefinition id="MessageEventDefinition_16yf9q2" messageRef="Message_0dfqafp" camunda:expression="${execution.getProcessEngineServices().getRuntimeService().createMessageCorrelation(&#34;PasswordIsValid&#34;).processInstanceId(execution.getProcessInstanceId()).correlateWithResult()}" />
       </bpmn:endEvent>
       <bpmn:boundaryEvent id="ErrorCondition" attachedToRef="ValidatePasswordService">
         <bpmn:outgoing>Flow_1sa08nw</bpmn:outgoing>
@@ -443,6 +443,9 @@ JSON.stringify(payload);</camunda:script>
       <bpmndi:BPMNShape id="Event_161smv9_di" bpmnElement="startBiometric">
         <dc:Bounds x="142" y="112" width="36" height="36" />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0qtkgot_di" bpmnElement="endBiometric">
+        <dc:Bounds x="592" y="172" width="36" height="36" />
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="BPMNShape_14c5v1p" bpmnElement="SendPush">
         <dc:Bounds x="230" y="90" width="100" height="80" />
         <bpmndi:BPMNLabel />
@@ -461,9 +464,6 @@ JSON.stringify(payload);</camunda:script>
         <bpmndi:BPMNLabel>
           <dc:Bounds x="474" y="215" width="75" height="27" />
         </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Event_0qtkgot_di" bpmnElement="endBiometric">
-        <dc:Bounds x="592" y="172" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_1xsb8d4_di" bpmnElement="Event_1xsb8d4">
         <dc:Bounds x="592" y="62" width="36" height="36" />
