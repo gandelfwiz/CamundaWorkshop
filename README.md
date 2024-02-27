@@ -61,6 +61,7 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 8. [Transaction and compensation](#step8)
 9. [Cross-process interaction](#step9)
 10. [Service mesh integration](#step10)
+11. [Integration with external application](#step11)
 
 &nbsp;
 
@@ -1430,3 +1431,321 @@ For this workshop we make it more simple. We implement a simple proxy endpoint i
 	```
 
 This exercise clarifies how the sidecar can integrate Camunda in service mesh. The changes you applied to the sidecar to activate and register the service to service discovery couldn't be applied to Camunda unless you don't embed Camunda libraries in your application creating a strong technology dependency between Camunda and service mesh integration implementation.
+
+&nbsp;
+
+<div id='step11'/>
+
+### **Step 11: Integration with external application**
+> The goal of this step is to start from an external web page the workflow of Authorization and set the password when customer choices this authorization mode.
+
+1) To proceed with this solution we need first of all put a gateway that queries the service discovery and resolve the call. To do this download nginx from the following link: https://nginx.org/download/nginx-1.25.4.zip
+	Download also consul-template that we will use to configure nginx: https://releases.hashicorp.com/consul-template/0.37.0/consul-template_0.37.0_windows_amd64.zip
+
+2) Unzip the two archives in subfolders *consul/* and *nginx/*. In consul-template folder add the following configuration file: 
+
+	`consul_template.hcl`
+	```properties
+	template {
+		source = "../nginx/conf/nginx-template.conf"
+		destination = "../nginx/conf/consul-nginx.conf"
+		command = "../nginx/nginx -s reload"
+	}
+
+	consul {
+		address="localhost:8500"
+		
+		retry {
+			enabled = true
+			attempts = 10
+			backoff = "300ms"
+		}
+	}
+	```
+
+3) In nginx folder, under conf/ subfolder add this template:
+
+	`nginx-template.conf`
+
+	```properties
+	upstream camunda {
+		{{- range service "CamundaSidecar" }}
+			server localhost:{{ .Port }};
+		{{- end }}
+	}
+
+	server {
+		listen 80;
+
+		location /workflow/ {
+			rewrite ^/workflow/(.*) /camunda/$1 break;
+			proxy_pass http://camunda;
+		}
+	}
+	```
+
+	And change nginx.conf as follows:
+
+	`nginx.conf`
+	```properties
+	#user  nobody;
+	worker_processes  1;
+
+	error_log  logs/error.log  debug;
+
+	#pid        logs/nginx.pid;
+
+	events {
+		worker_connections  1024;
+	}
+
+	http {
+		default_type  application/octet-stream;
+		include       mime.types;
+		include       consul-nginx.conf;
+
+		server {
+			listen 8100;
+			root ..;
+			index external_page.html;
+			
+			location ~ \.css$ {
+				add_header  Content-Type    text/css;
+			}
+		}
+	}
+	```
+
+4) Start the *sidecar application*, *camunda-bpm-run*, *consul*, then start *nginx* and finally start *consul-template*
+
+	```
+	java -jar sidecar-0.0.1-SNAPSHOT.jar
+
+	{camunda-bpm-run-7.20.0}/start.bat  
+
+	{consul_folder}/consul.exe agent -dev -config-file=config.json
+	
+	{nginx_folder}/nginx.exe
+	
+	{consul_template_folder}/consul-template.exe -config consul_template.hcl
+	```
+
+	You can check that everything is correctly set up with the following curl:
+
+	```s
+	curl http://localhost/workflow/process-definition
+	```
+
+5) Create the following SPA:
+
+	`external_page.html`
+	```html
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<link rel="stylesheet" href="styles.css">
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>Authorize Operation</title>
+			<script src="https://cdn.jsdelivr.net/npm/@webcomponents/webcomponentsjs@latest"></script>
+		</head>
+		<body>
+			<!-- Web Component to choose the authorization type -->
+			<authorize-operation></authorize-operation>
+
+			<script>
+				customElements.define('authorize-operation', class extends HTMLElement {
+					async connectedCallback() {
+						this.innerHTML = `
+						<h1 class="title">Autorizza Operazione</h1>
+						<div class="container">
+							<label for="amount">Importo:</label>
+							<input class="input-field" type="number" id="amount" name="amount" required>
+						</div>
+						<div>
+							<label for="authMethod">Metodo di Autenticazione:</label>
+							<select class="input-field" id="authMethod" name="authMethod" required>
+							<option value="BIOMETRIC">Biometrico</option>
+							<option value="PASSWORD">Password</option>
+							</select>
+						</div>
+						<button class="button" id="confirmBtn">Conferma</button>
+						`;
+
+						const confirmBtn = this.querySelector('#confirmBtn');
+						confirmBtn.addEventListener('click', this.confirmOperation.bind(this));
+					}
+
+					// Confirm authorization type
+					async confirmOperation() {
+						const amount = this.querySelector('#amount').value;
+						const authMethod = this.querySelector('#authMethod').value;
+
+						try {
+							var processInstanceId;
+							// Step 1. create process instance
+							sendWorkflowRequest(
+								{},
+								'POST', 
+								'process-definition/key/AuthorizationProcess/start')
+								.then((processData) => {
+								processInstanceId = processData.id;
+								console.log("1. Process data: " + JSON.stringify(processData));
+								closeTask(processInstanceId, 
+											{ "authorizationType": {
+													"value": authMethod
+													}
+												}
+											)
+											.then((completeTaskData) => {
+												console.log("3. Task completion data: " + (completeTaskData == null ? null : 
+															JSON.stringify(completeTaskData)));
+												if (authMethod == "PASSWORD") {
+													this.innerHTML = "<insert-password processInstanceId='"
+															+ processInstanceId + "'></insert-password>";
+												} else {
+													alert("Completa l'operazione sull'altro dispositivo");
+												}          
+												
+									})
+								}
+							)
+						} catch (error) {
+							console.error('Si è verificato un errore:', error);
+							alert('Si è verificato un errore durante l\'autorizzazione dell\'operazione');
+						}
+					}
+				})
+
+				// Web Component to insert the password
+				customElements.define("insert-password", class extends HTMLElement {
+					async connectedCallback() {
+						const processInstanceId = this.getAttribute("processInstanceId");
+						this.innerHTML = `
+							<div>
+								<h2 class="title">Conferma Password</h2>
+								<form id="passwordForm">
+									<label for="password">Password:</label>
+									<input type="input-field" type="password" id="password" name="password" required>
+									<br>
+									<button class="button" id="confirmBtn" type="submit">Conferma</button>
+								</form>
+							</div>
+						`;
+						this.querySelector('#passwordForm').addEventListener('submit', (event) => {
+							event.preventDefault();
+							const password = this.querySelector('#password').value;
+							closeTask( processInstanceId,
+							{
+								'password': {
+									'value' : password
+								}
+								}
+							).then((completeTaskData) => {
+									console.log("3. Task completion data: " + (completeTaskData == null ? null : 
+																JSON.stringify(completeTaskData)));
+									this.innerHTML = '<h1 class="title">Operazione Autorizzata con successo</h1>';
+								}
+							);
+						});
+					}
+				})
+
+				// actions to close a task:
+				// 	  1) Get the task
+				// 	  2) Submit the variables to complete it
+				async function closeTask(processInstanceId, variables) {
+					// Step 2. get active task waiting for completion
+					await sendWorkflowRequest(
+						null,
+						'GET',
+						'task?processInstanceId=' + processInstanceId + '&active=true'
+					)
+					.then((taskData) => {
+						const taskId = taskData[0].id;
+						console.log("2. Task data: " + JSON.stringify(taskData));
+						// Step 3. set authorization type
+						return sendWorkflowRequest(
+						{
+							variables
+						},
+						'POST', 
+						'task/' + taskId + "/complete")
+					})
+				}
+
+				// Handler to call rest endpoint
+				async function sendWorkflowRequest(payload, method, restEndpoint) {
+					return await fetch('http://localhost/workflow/' + restEndpoint, {
+						method: method,
+						headers: {
+							'Content-Type': 'application/json',
+							'Accept': 'application/json'
+						},
+						body: (method != "GET") ? JSON.stringify(payload) : null
+						}
+					)
+					.then(function(response) {
+						if (!response.ok) {
+							throw new Error('Errore nella richiesta: ' + response.status);
+						}
+						if (response.status != 204) {
+							return response.json();
+						}
+						return response;
+					})
+					.catch(function(error) {
+						console.error('Si è verificato un errore:', error);
+					});
+				}
+			</script>
+		</body>
+	</html>
+	```
+
+	You can add the css getting the file from the project.
+
+6) Fix the sidecar for the CORS policy. Change `CamundaForwarder` as follows:
+
+	```java
+	@Controller
+	@CrossOrigin(origins = "*")
+	@RequestMapping("/camunda")
+	@RequiredArgsConstructor
+	public class CamundaForwarder {
+		private final RestTemplate restTemplate;
+		private final ObjectMapper objectMapper;
+		@Value("${camunda.server.url}")
+		private String camundaServerUrl;
+
+		@RequestMapping(value = "/**", method = {
+				RequestMethod.GET, RequestMethod.DELETE, RequestMethod.POST, RequestMethod.PUT, RequestMethod.PATCH
+		})
+		public ResponseEntity<?> proxyCamundaRestApi(@RequestBody(required = false) String requestBody,
+													HttpServletRequest request) throws JsonProcessingException {
+			String targetUrl = camundaServerUrl +
+					"/" + Arrays.stream(request.getRequestURI().split("/"))
+					.skip(2)
+					.collect(Collectors.joining("/"));
+			if (Objects.nonNull(request.getQueryString())) {
+				targetUrl = targetUrl + "?" + request.getQueryString();
+			}
+			RequestEntity.BodyBuilder requestBuilder =
+					RequestEntity.method(HttpMethod.valueOf(request.getMethod()), targetUrl)
+							.header(HttpHeaders.CONTENT_TYPE, request.getHeader(HttpHeaders.CONTENT_TYPE));
+			RequestEntity<?> requestEntity;
+			if (Objects.nonNull(requestBody)) {
+				requestEntity = requestBuilder.body(objectMapper.readValue(requestBody, Object.class));
+			} else {
+				requestEntity = requestBuilder.build();
+			}
+			ResponseEntity<Object> response = restTemplate.exchange(requestEntity, Object.class);
+			return new ResponseEntity<>(response.getBody(), new HttpHeaders(), response.getStatusCode());
+
+		}
+	}
+	```
+
+	Restart the sidecar after changing.
+
+7) Open and fulfill the page selecting password method. On confirm the NGINX will resolve the host name with the sidecar and the workflow will start.
