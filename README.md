@@ -1480,6 +1480,21 @@ This exercise clarifies how the sidecar can integrate Camunda in service mesh. T
 		location /workflow/ {
 			rewrite ^/workflow/(.*) /camunda/$1 break;
 			proxy_pass http://camunda;
+			proxy_set_header Host $host;
+			proxy_set_header X-Real-IP $remote_addr;
+			proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+			proxy_set_header X-Forwarded-Proto $scheme;
+			proxy_set_header Origin "";
+			
+			add_header 'Access-Control-Allow-Origin' $http_Origin;
+			add_header 'Access-Control-Allow-Credentials' 'true';
+			add_header 'Access-Control-Allow-Methods' 'GET, POST, PATCH, PUT, DELETE, HEAD, OPTIONS';
+			add_header 'Access-Control-Allow-Headers' 'Keep-Alive,User-Agent,If-Modified-Since,Cache-Control,Content-Type';
+			add_header 'Access-Control-Max-Age' 86400;
+			add_header 'Content-Type' 'text/plain charset=UTF-8';
+			add_header 'Content-Length' 0;
+			return 204;
+		
 		}
 	}
 	```
@@ -1705,11 +1720,10 @@ This exercise clarifies how the sidecar can integrate Camunda in service mesh. T
 
 	You can add the css getting the file from the project.
 
-6) Fix the sidecar for the CORS policy. Change `CamundaForwarder` as follows:
+6) Extend the sidecar implementation for support of headers. Change `CamundaForwarder` as follows:
 
 	```java
 	@Controller
-	@CrossOrigin(origins = "*")
 	@RequestMapping("/camunda")
 	@RequiredArgsConstructor
 	public class CamundaForwarder {
@@ -1748,4 +1762,12 @@ This exercise clarifies how the sidecar can integrate Camunda in service mesh. T
 
 	Restart the sidecar after changing.
 
-7) Open and fulfill the page selecting password method. On confirm the NGINX will resolve the host name with the sidecar and the workflow will start.
+7) Since many processes can be created, there is a fix to apply to the workflow of authorization. In end event *SendPasswordIsValid* you should correlate the message just with the current instance specifying the processInstanceId:
+
+	```javascript
+	${execution.getProcessEngineServices().getRuntimeService().createMessageCorrelation("PasswordIsValid").processInstanceId(execution.getProcessInstanceId()).correlateWithResult()}
+	```
+
+8) Open and fulfill the page selecting password method. On confirm the NGINX will resolve the host name with the sidecar and the workflow will start.
+
+&nbsp;
