@@ -18,7 +18,6 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Controller
-@CrossOrigin(origins = "*")
 @RequestMapping("/camunda")
 @RequiredArgsConstructor
 public class CamundaForwarder {
