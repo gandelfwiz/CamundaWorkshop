@@ -1434,6 +1434,8 @@ This exercise clarifies how the sidecar can integrate Camunda in service mesh. T
 
 &nbsp;
 
+&nbsp;
+
 <div id='step11'/>
 
 ### **Step 11: Integration with external application**
@@ -1490,10 +1492,6 @@ This exercise clarifies how the sidecar can integrate Camunda in service mesh. T
 			add_header 'Access-Control-Allow-Credentials' 'true';
 			add_header 'Access-Control-Allow-Methods' 'GET, POST, PATCH, PUT, DELETE, HEAD, OPTIONS';
 			add_header 'Access-Control-Allow-Headers' 'Keep-Alive,User-Agent,If-Modified-Since,Cache-Control,Content-Type';
-			add_header 'Access-Control-Max-Age' 86400;
-			add_header 'Content-Type' 'text/plain charset=UTF-8';
-			add_header 'Content-Length' 0;
-			return 204;
 		
 		}
 	}
