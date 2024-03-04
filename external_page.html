@@ -19,6 +19,13 @@
             <label for="amount">Importo:</label>
             <input class="input-field" type="number" id="amount" name="amount" required>
           </div>
+          <div class="container">
+            <label for="customerId">Nome cliente:</label>
+            <select class="input-field" id="customerId" name="customerId" required>
+              <option value="Matteo">Matteo</option>
+              <option value="Gilda">Gilda</option>
+            </select>
+          </div>
           <div>
             <label for="authMethod">Metodo di Autenticazione:</label>
             <select class="input-field" id="authMethod" name="authMethod" required>
@@ -36,6 +43,7 @@
       async confirmOperation() {
         const amount = this.querySelector('#amount').value;
         const authMethod = this.querySelector('#authMethod').value;
+        const customerId = this.querySelector('#customerId').value;
 
         try {
           var processInstanceId;
@@ -45,8 +53,12 @@
               "workflowType": "AuthorizationProcess",
               "payload": [
                 {
-                  "key": "AuthorizationType",
+                  "key": "authorizationType",
                   "value": authMethod
+                },
+                {
+                  "key": "customerId",
+                  "value": customerId
                 }
               ]
             },
@@ -58,7 +70,7 @@
                 .then((responseBody) => {
                   processInstanceId = responseBody.uuid;
                   console.log("1. Process data: " + JSON.stringify(responseBody));
-                  if (authMethod == "PASSWORD") {
+                  if (responseBody.data.find(item => item.key == "authorizationTypeResult").value == "PASSWORD") {
                     this.innerHTML = "<inserisci-password processInstanceId='"
                             + processInstanceId + "'></inserisci-password>";
                   } else {
@@ -79,7 +91,7 @@
         const processInstanceId = this.getAttribute("processInstanceId");
         this.innerHTML = `
             <div>
-                <h2 class="title">Conferma Password</h2>
+                <h2 class="title" id="title">Conferma Password</h2>
                 <form id="passwordForm">
                     <label for="password">Password:</label>
                     <input type="input-field" type="password" id="password" name="password" required>
@@ -108,17 +120,17 @@
                 .then((result) => {
                   const isValid = result.data.filter((key) => key.key == "isValid");
                   if (isValid.length > 0 &&
-                    isValid[0].value.value) {
+                    isValid[0].value) {
                       this.innerHTML = '<h1 class="title">Operazione Autorizzata con successo</h1>';
                   } else {
                     const passwordStatus = result.data.filter((key) => key.key == "passwordError");
                     if (passwordStatus.length > 0 &&
-                      passwordStatus[0].value.value == "PasswordLocked") {
+                      passwordStatus[0].value == "PasswordLocked") {
                         invalidPasswordLabel.textContent = "Too many errors, password is locked.";
                       document.getElementById("confirmBtn").disabled = true;
                     } else {
                       invalidPasswordLabel.textContent = "Invalid Password. You have still " + 
-                          (2 - result.data.filter((key) => key.key == "tentativesCounter")[0].value.value)
+                          (2 - result.data.filter((key) => key.key == "tentativesCounter")[0].value)
                           + " tentatives.";
                     }
                     invalidPasswordLabel.style.display = 'inline';
@@ -147,6 +159,7 @@
     }
 
     async function sendWorkflowRequest(payload, method, restEndpoint) {
+      try {
       return await fetch('http://localhost/workflow/' + restEndpoint, {
           method: method,
           headers: {
@@ -158,7 +171,10 @@
       )
       .then(function(response) {
           return response;
-      });
+      })
+    } catch (error) {
+        console.log("Error calling workflow " + error);
+    }
   }
   </script>
 </body>

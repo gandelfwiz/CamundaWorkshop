@@ -1,0 +1,7 @@
+hazelcast-client:
+  network:
+    smart-routing: true
+    connection-timeout: 5000
+    cluster-members:
+      - localhost:5701
+  cluster-name: dev

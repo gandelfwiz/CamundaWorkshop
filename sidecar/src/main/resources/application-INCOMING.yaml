@@ -24,11 +24,11 @@ spring:
     consumer:
       key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-      group-id: camunda-sidecar-local
+      group-id: camunda-sidecar-local-incoming
       auto-offset-reset: earliest
 camunda:
   server:
     url: http://localhost:8080/engine-rest
 kafka:
   feedback-topic: workshop_camunda_feedback_topic
-  autostartup: false
+  autostartup: true

@@ -49,7 +49,7 @@
                 </camunda:map>
               </camunda:inputParameter>
               <camunda:inputParameter name="method">POST</camunda:inputParameter>
-              <camunda:inputParameter name="url">http://localhost:8500/kafka/events/camunda/publishing</camunda:inputParameter>
+              <camunda:inputParameter name="url">http://localhost:8900/kafka/events/camunda/publishing</camunda:inputParameter>
               <camunda:inputParameter name="payload">
                 <camunda:script scriptFormat="javascript">var payload = {
 	"workflowId": execution.getProcessInstanceId(),
@@ -138,12 +138,24 @@ JSON.stringify(payload);</camunda:script>
       <bpmn:endEvent id="endPassword">
         <bpmn:incoming>Flow_1mgesij</bpmn:incoming>
       </bpmn:endEvent>
-      <bpmn:serviceTask id="ValidatePasswordService" name="Validate password" camunda:expression="${execution.getVariable(&#34;password&#34;).equals(&#34;111111&#34;)}" camunda:resultVariable="isValid">
+      <bpmn:serviceTask id="ValidatePasswordService" name="Validate password" camunda:expression="${execution.getVariableLocal(&#34;password&#34;).equals(&#34;111111&#34;)}" camunda:resultVariable="isValid">
         <bpmn:extensionElements>
           <camunda:inputOutput>
             <camunda:outputParameter name="tentativesCounter">${loopCounter}</camunda:outputParameter>
           </camunda:inputOutput>
-          <camunda:executionListener expression="${execution.setVariable(&#34;isValid&#34;, null)}" event="start" />
+          <camunda:executionListener event="start">
+            <camunda:script scriptFormat="groovy">try {
+    def response = new URL('http://localhost:8900/business-data/payload/' + businessUuid).getText()
+
+    def responseJson = new groovy.json.JsonSlurper().parseText(response)
+    responseJson.data.each { variable -&gt;
+        execution.setVariableLocal(variable.key, variable.value)
+    }
+execution.setVariable("isValid", null)
+} catch (Exception e) {
+    throw new org.camunda.bpm.engine.ProcessEngineException("Errore durante la chiamata REST: ${e.message}")
+}</camunda:script>
+          </camunda:executionListener>
         </bpmn:extensionElements>
         <bpmn:incoming>Flow_1xto3js</bpmn:incoming>
         <bpmn:outgoing>Flow_1mgesij</bpmn:outgoing>
@@ -250,10 +262,28 @@ JSON.stringify(payload);</camunda:script>
     </bpmn:subProcess>
     <bpmn:businessRuleTask id="SelectAuthorizationType" name="Select the authorization type" camunda:resultVariable="authorizationTypeResult" camunda:decisionRef="AuthorizationTypeDecision" camunda:mapDecisionResult="singleEntry">
       <bpmn:extensionElements>
-        <camunda:inputOutput>
-          <camunda:inputParameter name="BiometricEnrolled">${true}</camunda:inputParameter>
-          <camunda:inputParameter name="AuthorizationTypeRequested">${AuthorizationType}</camunda:inputParameter>
-        </camunda:inputOutput>
+        <camunda:executionListener event="start">
+          <camunda:script scriptFormat="groovy">try {
+    def response = new URL('http://localhost:8900/business-data/payload/' + businessUuid).getText()
+
+    def responseJson = new groovy.json.JsonSlurper().parseText(response)
+    responseJson.data.each { variable -&gt;
+        execution.setVariableLocal(variable.key, variable.value)
+    }
+    execution.setVariableLocal("AuthorizationTypeRequested", execution.getVariableLocal("authorizationType"))
+    def responseEnrollment = new URL('http://localhost:8900/business-data/enrollment/' + execution.getVariableLocal("customerId")).getText()
+    if (responseEnrollment != null &amp;&amp; !responseEnrollment.isEmpty()) {
+        def responseEnrollmentJson = new groovy.json.JsonSlurper().parseText(responseEnrollment)
+         execution.setVariableLocal("BiometricEnrolled",responseEnrollmentJson.enrolledFlg)
+    } else {
+        // default
+        println "Response is null, biometric enrolled is false by default"
+        execution.setVariableLocal("BiometricEnrolled",false)
+    }
+} catch (Exception e) {
+    throw new org.camunda.bpm.engine.ProcessEngineException("Errore durante la chiamata REST: ${e.message}")
+}</camunda:script>
+        </camunda:executionListener>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_14c2ir8</bpmn:incoming>
       <bpmn:outgoing>Flow_02hv2i9</bpmn:outgoing>
@@ -298,23 +328,23 @@ JSON.stringify(payload);</camunda:script>
       <bpmndi:BPMNShape id="Activity_10fzwc4_di" bpmnElement="ValidatePasswordService">
         <dc:Bounds x="710" y="390" width="100" height="80" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Event_0f28q6d_di" bpmnElement="ThrowError">
-        <dc:Bounds x="682" y="522" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="658" y="565" width="84" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_1ehk8af_di" bpmnElement="SendPasswordIsValid">
         <dc:Bounds x="842" y="522" width="36" height="36" />
         <bpmndi:BPMNLabel>
           <dc:Bounds x="818" y="565" width="84" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Event_01aj7n8_di" bpmnElement="ValidCondition">
-        <dc:Bounds x="792" y="452" width="36" height="36" />
+      <bpmndi:BPMNShape id="Event_0f28q6d_di" bpmnElement="ThrowError">
+        <dc:Bounds x="682" y="522" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="658" y="565" width="84" height="14" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_17oe5zm_di" bpmnElement="ErrorCondition">
         <dc:Bounds x="742" y="452" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_01aj7n8_di" bpmnElement="ValidCondition">
+        <dc:Bounds x="792" y="452" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_17exb1f_di" bpmnElement="Flow_17exb1f">
         <di:waypoint x="498" y="430" />

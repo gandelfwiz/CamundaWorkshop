@@ -12,8 +12,15 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
     auto.register.schema: false
+    # for mock setup listener
+    consumer:
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      group-id: camunda-sidecar-local-outgoing
+      auto-offset-reset: earliest
 kafka:
   request-topic: workshop_camunda_request_topic
-  # properties for mock
+  # for rest endpoint that simulates kafka sending from third party
   feedback-topic: workshop_camunda_feedback_topic
-  autostartup: false
+  # for mock autostartup listener
+  autostartup: true

@@ -1,0 +1,10 @@
+enrollments:
+- id: 8d864f42-fa6d-4064-a578-2131d9732635
+  customerId: Roberto
+  enrolledFlg: 1
+- id: 087c416b-dc00-40cf-a759-ce3153d70e4c
+  customerId: Gilda
+  enrolledFlg: 0
+- id: 2b3531ff-84c1-4abb-ba55-1e2c84ee4b1f
+  customerId: Matteo
+  enrolledFlg: 1

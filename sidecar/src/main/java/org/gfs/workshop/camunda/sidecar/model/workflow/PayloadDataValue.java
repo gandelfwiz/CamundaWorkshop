@@ -5,9 +5,11 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
+
 @Data
 @NoArgsConstructor
-public class PayloadDataValue {
+public class PayloadDataValue implements Serializable {
     private Object value;
 
     @JsonValue

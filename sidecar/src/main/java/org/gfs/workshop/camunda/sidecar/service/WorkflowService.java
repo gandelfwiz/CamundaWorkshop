@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class WorkflowService {
     private final CamundaService camundaService;
+    private final BusinessDataService businessDataService;
 
     /**
      * Service to create a new Workflow Instance.
@@ -23,7 +24,7 @@ public class WorkflowService {
      * @return result of first execution
      */
     public WorkflowInstanceDto create(WorkflowRequestInstanceDto workflowRequestInstanceDto) {
-        return camundaService.startNewProcess(workflowRequestInstanceDto);
+        return camundaService.startNewProcess(businessDataService.wrap(workflowRequestInstanceDto));
     }
 
     /**
@@ -35,7 +36,7 @@ public class WorkflowService {
      */
     public WorkflowInstanceDto update(UUID instanceId, WorkflowRequestInstanceDto workflowRequestInstanceDto) {
         WorkflowInstanceDto response = new WorkflowInstanceDto().uuid(instanceId);
-        return act(response, workflowRequestInstanceDto);
+        return act(response, businessDataService.wrap(workflowRequestInstanceDto));
     }
 
     /**

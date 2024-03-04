@@ -17,12 +17,12 @@ import java.util.UUID;
 
 @Controller
 @Profile("INCOMING")
-//@CrossOrigin(origins = "*")
 @RequestMapping("/workflow")
 @RequiredArgsConstructor
 public class WorkflowController {
 
     private final WorkflowService workflowService;
+
     @PostMapping(value = "/instances", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<WorkflowInstanceDto> createWorkflow(@RequestBody WorkflowRequestInstanceDto workflowRequestInstanceDto) {
         WorkflowInstanceDto response = workflowService.create(workflowRequestInstanceDto);

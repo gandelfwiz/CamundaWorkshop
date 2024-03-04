@@ -63,6 +63,7 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 10. [Service mesh integration](#step10)
 11. [Integration with external application](#step11)
 12. [DMN and custom endpoints](#step12)
+13. [Working with external business data](#step13)
 
 &nbsp;
 
@@ -1934,105 +1935,105 @@ This exercise clarifies how the sidecar can integrate Camunda in service mesh. T
 
 	`WorkflowService.java`
 	
-	```java
-	/**
-	* Route the update process automatically to the task completion or message correlation
-	* @param instance Instance of the process
-	* @param workflowRequestInstanceDto Data
-	* @return Result of execution with process variables
-	*/
-	private WorkflowInstanceDto act(WorkflowInstanceDto instance, WorkflowRequestInstanceDto workflowRequestInstanceDto) {
-		// 1. Retrieve the activity instances of the process instance. In this way you can find
-		//    the type of task that are active and react only for the ones that can trigger a task completion,
-		//    a message or a signal
-		ActivityInstanceDto activity = camundaService.getActivityInstances(instance.getUuid());
+		```java
+		/**
+		* Route the update process automatically to the task completion or message correlation
+		* @param instance Instance of the process
+		* @param workflowRequestInstanceDto Data
+		* @return Result of execution with process variables
+		*/
+		private WorkflowInstanceDto act(WorkflowInstanceDto instance, WorkflowRequestInstanceDto workflowRequestInstanceDto) {
+			// 1. Retrieve the activity instances of the process instance. In this way you can find
+			//    the type of task that are active and react only for the ones that can trigger a task completion,
+			//    a message or a signal
+			ActivityInstanceDto activity = camundaService.getActivityInstances(instance.getUuid());
 
-		List<PayloadData> data = null;
+			List<PayloadData> data = null;
 
-		// 2. Look for the active element that can be triggered
-		InstanceDto activeInstance = lookForTriggerInElement(activity);
+			// 2. Look for the active element that can be triggered
+			InstanceDto activeInstance = lookForTriggerInElement(activity);
 
-		// 3. Routing of calls to Correlation of signal and message or Task completion
-		if (Objects.nonNull(activeInstance)) {
-			if (Objects.nonNull(workflowRequestInstanceDto.getEventName())) {
-				switch (TriggerOwnedMember.getFromType(activeInstance.getActivityType()).getTriggerType()) {
-					case SIGNAL -> camundaService.correlate(
-							SignalDto.builder()
-									.name(workflowRequestInstanceDto.getEventName())
-									.build(),
-							Void.class,
-							TriggerType.SIGNAL);
-					case MESSAGE -> data = (camundaService.correlate(
-							CorrelationMessageDto.builder()
-									.messageName(workflowRequestInstanceDto.getEventName())
-									.processInstanceId(instance.getUuid().toString())
-									.build(),
-							MessageCorrelationResultWithVariableDto.class,
-							TriggerType.MESSAGE)).getVariables()
+			// 3. Routing of calls to Correlation of signal and message or Task completion
+			if (Objects.nonNull(activeInstance)) {
+				if (Objects.nonNull(workflowRequestInstanceDto.getEventName())) {
+					switch (TriggerOwnedMember.getFromType(activeInstance.getActivityType()).getTriggerType()) {
+						case SIGNAL -> camundaService.correlate(
+								SignalDto.builder()
+										.name(workflowRequestInstanceDto.getEventName())
+										.build(),
+								Void.class,
+								TriggerType.SIGNAL);
+						case MESSAGE -> data = (camundaService.correlate(
+								CorrelationMessageDto.builder()
+										.messageName(workflowRequestInstanceDto.getEventName())
+										.processInstanceId(instance.getUuid().toString())
+										.build(),
+								MessageCorrelationResultWithVariableDto.class,
+								TriggerType.MESSAGE)).getVariables()
+								.entrySet()
+								.stream()
+								.map(entry -> new PayloadData().key(entry.getKey()).value(new PayloadDataValue(entry.getValue().getValue())))
+								.collect(Collectors.toList());
+					}
+				} else if (TriggerType.COMPLETE.equals(TriggerOwnedMember.getFromType(activeInstance.getActivityType()).getTriggerType())) {
+					data = camundaService.complete(workflowRequestInstanceDto, activeInstance.getExecutionIds(), instance.getUuid())
 							.entrySet()
 							.stream()
 							.map(entry -> new PayloadData().key(entry.getKey()).value(new PayloadDataValue(entry.getValue().getValue())))
 							.collect(Collectors.toList());
 				}
-			} else if (TriggerType.COMPLETE.equals(TriggerOwnedMember.getFromType(activeInstance.getActivityType()).getTriggerType())) {
-				data = camundaService.complete(workflowRequestInstanceDto, activeInstance.getExecutionIds(), instance.getUuid())
-						.entrySet()
-						.stream()
-						.map(entry -> new PayloadData().key(entry.getKey()).value(new PayloadDataValue(entry.getValue().getValue())))
-						.collect(Collectors.toList());
 			}
-		}
-		return instance.data(data);
-	}
-
-	/**
-	* Look for a possible activity that can trigger a message or a task completion
-	* @param activity The current activity of the process instance
-	* @return An instance object
-	*/
-	private InstanceDto lookForTriggerInElement(ActivityInstanceDto activity) {
-		if (Objects.isNull(activity)) return null;
-
-		// Use an enum to define which elements can trigger a call
-		if (TriggerOwnedMember.isTrigger(activity.getActivityType())) {
-			return activity;
+			return instance.data(data);
 		}
 
-		// Look into children list
-		if (Objects.isNull(activity.getChildActivityInstances()) &&
-				Objects.isNull(activity.getChildTransitionInstances())) {
-			return null;
+		/**
+		* Look for a possible activity that can trigger a message or a task completion
+		* @param activity The current activity of the process instance
+		* @return An instance object
+		*/
+		private InstanceDto lookForTriggerInElement(ActivityInstanceDto activity) {
+			if (Objects.isNull(activity)) return null;
+
+			// Use an enum to define which elements can trigger a call
+			if (TriggerOwnedMember.isTrigger(activity.getActivityType())) {
+				return activity;
+			}
+
+			// Look into children list
+			if (Objects.isNull(activity.getChildActivityInstances()) &&
+					Objects.isNull(activity.getChildTransitionInstances())) {
+				return null;
+			}
+
+			if (Objects.nonNull(activity.getChildTransitionInstances()) &&
+					!activity.getChildTransitionInstances().isEmpty()) {
+				InstanceDto instanceDto = activity.getChildTransitionInstances()
+						.stream()
+						.filter(instance -> TriggerOwnedMember.isTrigger(instance.getActivityType()))
+						.findFirst()
+						.orElse(null);
+				if (Objects.nonNull(instanceDto)) return instanceDto;
+			}
+
+			// Search in sublist is called
+			return lookForTriggerInList(activity.getChildActivityInstances());
 		}
 
-		if (Objects.nonNull(activity.getChildTransitionInstances()) &&
-				!activity.getChildTransitionInstances().isEmpty()) {
-			InstanceDto instanceDto = activity.getChildTransitionInstances()
-					.stream()
+		/**
+		* Look for a triggerable task or event in process instance
+		* @param childTransitionInstances list of subactivities
+		* @return the instance to trigger
+		*/
+		private InstanceDto lookForTriggerInList(List<ActivityInstanceDto> childTransitionInstances) {
+			return childTransitionInstances.stream()
+					// call recursively the look for trigger for each element
+					.map(this::lookForTriggerInElement)
+					.filter(Objects::nonNull)
 					.filter(instance -> TriggerOwnedMember.isTrigger(instance.getActivityType()))
 					.findFirst()
 					.orElse(null);
-			if (Objects.nonNull(instanceDto)) return instanceDto;
 		}
-
-		// Search in sublist is called
-		return lookForTriggerInList(activity.getChildActivityInstances());
-	}
-
-	/**
-	* Look for a triggerable task or event in process instance
-	* @param childTransitionInstances list of subactivities
-	* @return the instance to trigger
-	*/
-	private InstanceDto lookForTriggerInList(List<ActivityInstanceDto> childTransitionInstances) {
-		return childTransitionInstances.stream()
-				// call recursively the look for trigger for each element
-				.map(this::lookForTriggerInElement)
-				.filter(Objects::nonNull)
-				.filter(instance -> TriggerOwnedMember.isTrigger(instance.getActivityType()))
-				.findFirst()
-				.orElse(null);
-	}
-	```
+		```
 
 4. Divide the application in two different profiles:
 	* ***Sidecar incoming***
@@ -2247,4 +2248,337 @@ This exercise clarifies how the sidecar can integrate Camunda in service mesh. T
 	```
 
 	and play with the page. Remember that to trigger the SMS you have to change the external service as done in the repository to include the service discovery integration with rest template. You should add the dependency to `spring-cloud-consul` and setup the application.yaml as done for the sidecar.
+
+&nbsp;
+
+<div id='step13'/>
+
+### **Step 13: Working with external business data**
+
+&nbsp;
+
+> In last exercise we have created a sidecar for input and one for output. The input sidecar could store business data in an external source (database, shared cache or other storage) and the process could retrieve before to run a task the data. This approach allows a strong decoupling between the Workflow engine and its metadata and the business metadata. The sidecar store data and assign them an id. This identification code is provided to the Camunda Workflow that queries the sidecar to retrieve the business information. In this way the business information in the workflow tables will be limited.
+
+1. Let's setup a shared cache in memory to share data between incoming and outgoing sidecars:
+	* Add hazelcast dependency:
+
+	```xml
+	<dependency>
+		<groupId>com.hazelcast</groupId>
+		<artifactId>hazelcast-spring</artifactId>
+		<version>5.3.6</version>
+	</dependency>
+	```
+
+2. Configure a `hazelcast-client.yaml` in `src/main/resources`:
+
+	```yaml
+	hazelcast-client:
+		network:
+			smart-routing: true
+			connection-timeout: 5000
+			cluster-members:
+			- localhost:5701
+		cluster-name: dev
+	```
+3. Add endpoint to retrieve enrolled flag from customer id (name)
+
+	`GET /business-data/enrollment/{id}` \
+	`GET /business-data/payload/{id}`
+
+	```java
+	@Controller
+	@Profile("INCOMING")
+	@RequestMapping("/business-data")
+	@RequiredArgsConstructor
+	public class BusinessData {
+		private final BusinessDataService service;
+
+		@GetMapping("/enrollment/{id}")
+		public ResponseEntity<EnrollmentDataEntity> getEnrollment(@PathVariable("id") String customerId) {
+			return ResponseEntity.ok(service.getEnrollment(customerId));
+		}
+
+		@GetMapping("/payload/{id}")
+		public ResponseEntity<BusinessDataEntityValue> getBusinessData(@PathVariable("id") String id) {
+			return ResponseEntity.ok(service.getPayload(id));
+		}
+	}
+	```
+
+	and setup services. Note that to use Hazelcast compressed serialization out of the box the list is serialized
+	in json and subsequently deserialized from json using another type of entity
+
+	```java
+	@Service
+	@RequiredArgsConstructor
+	public class BusinessDataService {
+		private final BusinessDataRepository<EnrollmentDataEntity> repositoryEnrollment;
+		private final BusinessDataRepository<BusinessDataEntity> repositoryBusiness;
+		private final ObjectMapper objectMapper;
+
+		public WorkflowRequestInstanceDto wrap(WorkflowRequestInstanceDto workflowRequestInstanceDto) {
+			BusinessDataEntity entity;
+			try {
+				entity = new BusinessDataEntity(UUID.randomUUID().toString(),
+						objectMapper.writeValueAsString(workflowRequestInstanceDto.getPayload()));
+			} catch (JsonProcessingException e) {
+				throw new RuntimeException(e);
+			}
+			repositoryBusiness.insert(entity);
+			workflowRequestInstanceDto.setPayload(
+					List.of(new PayloadData()
+							.key("businessUuid")
+							.value(new PayloadDataValue(entity.getId()))
+					)
+			);
+			return workflowRequestInstanceDto;
+		}
+
+		public EnrollmentDataEntity getEnrollment(String customerId) {
+			return repositoryEnrollment.select(customerId).orElse(null);
+		}
+
+		public BusinessDataEntityValue getPayload(String id) {
+			return BusinessDataEntityValue.from(repositoryBusiness.select(id).orElse(null));
+		}
+	}
+	```
+
+	entities:
+
+	```java
+	@Data
+	public class EnrollmentDataEntity {
+		private String id;
+		private String customerId;
+		private Boolean enrolledFlg;
+	}
+	@Data
+	@AllArgsConstructor
+	public class BusinessDataEntity {
+		private String id;
+		@JsonIgnore()
+		private String data;
+	}
+
+	@EqualsAndHashCode(callSuper = true)
+	@Data
+	public class BusinessDataEntityValue extends BusinessDataEntity {
+		@JsonProperty("data")
+		private List<PayloadData> dataList;
+
+		public static BusinessDataEntityValue from(BusinessDataEntity businessDataEntity) {
+			if (Objects.isNull(businessDataEntity)) return null;
+			try {
+				BusinessDataEntityValue result = new BusinessDataEntityValue();
+				result.setDataList(new ObjectMapper().readValue(result.getData(),
+						new TypeReference<>() {}));
+				result.setId(businessDataEntity.getId());
+				return result;
+			} catch (JsonProcessingException e) {
+				throw new RuntimeException(e);
+			}
+		}
+	}
+	```
+
+	and repositories:
+
+	```java
+	
+	// generic interface
+	public interface BusinessDataRepository<T> {
+		Optional<T> select(String id);
+
+		int insert(T data);
+	}
+
+	// abstract implementation for share cache hazelcast
+	public abstract class HazelcastBusinessDataRepository<T> implements BusinessDataRepository<T> {
+
+		@Autowired
+		private HazelcastInstance hazelcastInstance;
+
+		// assign to the map the name of the type class
+		private ConcurrentMap<String, T> retrieveMap() {
+			String className = ((ParameterizedType) getClass().getGenericSuperclass())
+					.getActualTypeArguments()[0]
+					.getTypeName();
+			return hazelcastInstance.getMap(className.substring(
+					className.lastIndexOf(".") + 1)
+			);
+		}
+
+		protected T put(String key, T value) {
+			retrieveMap()
+					.put(key, value);
+			return value;
+		}
+
+		protected T get(String key) {
+			return retrieveMap()
+					.get(key);
+		}
+	}
+
+	// implementation
+	@Repository
+	@RequiredArgsConstructor
+	public class BusinessDataRepositoryBusiness extends HazelcastBusinessDataRepository<BusinessDataEntity> {
+
+		@Override
+		public void insert(BusinessDataEntity entity) {
+			super.put(entity.getId(), entity);
+		}
+
+		@Override
+		public Optional<BusinessDataEntity> select(String id) {
+			return Optional.ofNullable(get(id));
+		}
+	}
+
+	@Repository
+	@RequiredArgsConstructor
+	public class BusinessDataRepositoryEnrollment extends HazelcastBusinessDataRepository<EnrollmentDataEntity> {
+
+		@Override
+		public Optional<EnrollmentDataEntity> select(String id) {
+			return Optional.ofNullable(get(id));
+		}
+
+		@Override
+		public void insert(EnrollmentDataEntity data) {
+			put(data.getId(), data);
+		}
+	}
+	```
+
+4. Adjust the WorkflowService to wrap business data in H2:
+
+	```java
+	@Autowired
+	private final BusinessDataService businessDataService;
+
+	public WorkflowInstanceDto update(UUID instanceId, WorkflowRequestInstanceDto workflowRequestInstanceDto) {
+		WorkflowInstanceDto response = new WorkflowInstanceDto().uuid(instanceId);
+		return act(response, businessDataService.wrap(workflowRequestInstanceDto));
+	}
+
+	public WorkflowInstanceDto create(WorkflowRequestInstanceDto workflowRequestInstanceDto) {
+        return camundaService.startNewProcess(businessDataService.wrap(workflowRequestInstanceDto));
+    }
+	```
+
+5. Download hazelcast from this [link](https://github.com/hazelcast/hazelcast/releases/download/v5.3.6/hazelcast-5.3.6-slim.zip). Unzip it where you prefer, check that in path there are not spaces. Correct the scripts `hz-start.bat` and `hz-cli.bat` changing `CALL common.bat` in `CALL bin\common.bat`
+	Then proceed running the server.
+
+	```dos
+	bin\hz-start.bat
+	```
+
+6. Add groovy script in camunda to retrieve information for DMN table at task level. To do this, add an execution listener to the rule task and setup this groovy start script:
+
+	```groovy
+	try {
+		def response = new URL('http://localhost:8900/business-data/payload/' + businessUuid).getText()
+
+		def responseJson = new groovy.json.JsonSlurper().parseText(response)
+		responseJson.data.each { variable ->
+			execution.setVariableLocal(variable.key, variable.value)
+		}
+		execution.setVariableLocal("AuthorizationTypeRequested", execution.getVariableLocal("authorizationType"))
+		def responseEnrollment = new URL('http://localhost:8900/business-data/enrollment/' + execution.getVariableLocal("customerId")).getText()
+		if (responseEnrollment != null && !responseEnrollment.isEmpty()) {
+			def responseEnrollmentJson = new groovy.json.JsonSlurper().parseText(responseEnrollment)
+			execution.setVariableLocal("BiometricEnrolled",responseEnrollmentJson.enrolledFlg)
+		} else {
+			// default
+			println "Response is null, biometric enrolled is false by default"
+			execution.setVariableLocal("BiometricEnrolled",false)
+		}
+	} catch (Exception e) {
+		throw new org.camunda.bpm.engine.ProcessEngineException("Errore durante la chiamata REST: ${e.message}")
+	}
+	```
+
+	Remove input field because they are set by execution listener.
+	**Remember** that *Inputs* field set up a task variable getting value from a process context. 
+	If you would write the script above in inputs the *.setVariableLocal* would populate process variables.
+	Instead the *execution listener* is executed at task level, so the variables will exist just in the runtime of the task
+	without being stored in camunda database.
+
+7. Add a groovy script to `Validate password` too, again in execution listener:
+
+	```groovy
+	try {
+		def response = new URL('http://localhost:8900/business-data/payload/' + businessUuid).getText()
+
+		def responseJson = new groovy.json.JsonSlurper().parseText(response)
+		responseJson.data.each { variable ->
+			execution.setVariableLocal(variable.key, variable.value)
+		}
+		execution.setVariable("isValid", null)
+	} catch (Exception e) {
+		throw new org.camunda.bpm.engine.ProcessEngineException("Errore durante la chiamata REST: ${e.message}")
+	}
+	```
+
+	Change the expression to *execution.getVariableLocal("password).equals...*
+
+8. Change the result evaluation in `external_page.html` of *authMethod == password* to show the *inserisci-password* webcomponent as follows: `if (responseBody.data.find(item => item.key == "authorizationTypeResult").value == "PASSWORD") {` to look for the authorizationTypeResult coming from the workflow. In this way if the user is not registered for biometric device the system switches to the password.
+
+9. Finally create a HazelcastDataLoader that upload the enrollment registry at the startup:
+
+	```java
+	@Component
+	@RequiredArgsConstructor
+	@Profile("OUTGOING")
+	public class HazelcastDataLoader implements CommandLineRunner {
+		private final HazelcastInstance hazelcastInstance;
+		private final ObjectMapper objectMapper;
+
+		@Override
+		public void run(String... args) throws Exception {
+			IMap<String, EnrollmentDataEntity> map =
+					hazelcastInstance.getMap("EnrollmentDataEntity");
+			map.destroy();
+			IndexConfig config = new IndexConfig(IndexType.HASH, "customerId");
+			map.addIndex(config);
+			new ObjectMapper(new YAMLFactory())
+					.readValue(getClass().getClassLoader().getResourceAsStream("data.yaml"),
+							new TypeReference<Map<String, List<EnrollmentDataEntity>>>() {
+							})
+					.get("enrollments")
+					.forEach(record -> {
+						map.computeIfAbsent(record.getId(), (key) -> record);
+					});
+		}
+	}
+	```
+	and create a `data.yaml` file to populate the cache:
+
+	```yaml
+	enrollments:
+	- id: 8d864f42-fa6d-4064-a578-2131d9732635
+	customerId: Roberto
+	enrolledFlg: 1
+	- id: 087c416b-dc00-40cf-a759-ce3153d70e4c
+	customerId: Gilda
+	enrolledFlg: 0
+	- id: 2b3531ff-84c1-4abb-ba55-1e2c84ee4b1f
+	customerId: Matteo
+	enrolledFlg: 1
+	```
+
+10. Now try the page: when you select BIOMETRIC with Gilda the page will show the `inserisci-password` web component. Instead when you select BIOMETRIC with Matteo and Roberto the page will show the alert to approve the operation from the other device.
+When you select PASSWORD with each of them the password will work as expected.
+
+
+
+
+
+
+
+
 

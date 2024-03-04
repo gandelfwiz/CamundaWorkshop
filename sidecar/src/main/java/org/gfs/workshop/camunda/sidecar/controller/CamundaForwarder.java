@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 
 @Controller
 @Profile("INCOMING")
-
 @RequestMapping("/camunda")
 @RequiredArgsConstructor
 public class CamundaForwarder {
