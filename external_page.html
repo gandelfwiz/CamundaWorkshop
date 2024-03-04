@@ -41,31 +41,32 @@
           var processInstanceId;
           // Step 1. create process instance
           sendWorkflowRequest(
-            {},
+            {
+              "workflowType": "AuthorizationProcess",
+              "payload": [
+                {
+                  "key": "AuthorizationType",
+                  "value": authMethod
+                }
+              ]
+            },
             'POST', 
-            'process-definition/key/AuthorizationProcess/start')
-            .then((processData) => {
-              processInstanceId = processData.id;
-              console.log("1. Process data: " + JSON.stringify(processData));
-              closeTask(processInstanceId, 
-                        { "authorizationType": {
-                                  "value": authMethod
-                                }
-                              }
-                          )
-                          .then((completeTaskData) => {
-                              console.log("3. Task completion data: " + (completeTaskData == null ? null : 
-                                         JSON.stringify(completeTaskData)));
-                              if (authMethod == "PASSWORD") {
-                                this.innerHTML = "<inserisci-password processInstanceId='"
-                                        + processInstanceId + "'></inserisci-password>";
-                              } else {
-                                alert("Completa l'operazione sull'altro dispositivo");
-                              }          
-                              
-                })
-            }
-          )
+            'instances')
+            .then((response) => {
+              if (response.status != 204 && response.status < 300) {
+                response.json()
+                .then((responseBody) => {
+                  processInstanceId = responseBody.uuid;
+                  console.log("1. Process data: " + JSON.stringify(responseBody));
+                  if (authMethod == "PASSWORD") {
+                    this.innerHTML = "<inserisci-password processInstanceId='"
+                            + processInstanceId + "'></inserisci-password>";
+                  } else {
+                    alert("Completa l'operazione sull'altro dispositivo");
+                  }
+                });
+              }               
+            })
         } catch (error) {
           console.error('Si è verificato un errore:', error);
           alert('Si è verificato un errore durante l\'autorizzazione dell\'operazione');
@@ -82,6 +83,9 @@
                 <form id="passwordForm">
                     <label for="password">Password:</label>
                     <input type="input-field" type="password" id="password" name="password" required>
+                    <span id="invalidPasswordLabel" style="color: red; display: none;">
+                      Invalid Password
+                    </span>
                     <br>
                     <button class="button" id="confirmBtn" type="submit">Conferma</button>
                 </form>
@@ -91,39 +95,55 @@
             event.preventDefault();
             const password = this.querySelector('#password').value;
             closeTask( processInstanceId,
-               {
-                  'password': {
-                    'value' : password
-                  }
+              [ {
+                  'key': 'password',
+                  'value' : String(password)
                 }
+              ]
             ).then((completeTaskData) => {
                     console.log("3. Task completion data: " + (completeTaskData == null ? null : 
                                                   JSON.stringify(completeTaskData)));
-                    this.innerHTML = '<h1 class="title">Operazione Autorizzata con successo</h1>';
+              if (completeTaskData.status < 300) {
+                completeTaskData.json()
+                .then((result) => {
+                  const isValid = result.data.filter((key) => key.key == "isValid");
+                  if (isValid.length > 0 &&
+                    isValid[0].value.value) {
+                      this.innerHTML = '<h1 class="title">Operazione Autorizzata con successo</h1>';
+                  } else {
+                    const passwordStatus = result.data.filter((key) => key.key == "passwordError");
+                    if (passwordStatus.length > 0 &&
+                      passwordStatus[0].value.value == "PasswordLocked") {
+                        invalidPasswordLabel.textContent = "Too many errors, password is locked.";
+                      document.getElementById("confirmBtn").disabled = true;
+                    } else {
+                      invalidPasswordLabel.textContent = "Invalid Password. You have still " + 
+                          (2 - result.data.filter((key) => key.key == "tentativesCounter")[0].value.value)
+                          + " tentatives.";
+                    }
+                    invalidPasswordLabel.style.display = 'inline';
                   }
+                })
+              } else {
+                console.log("Error in call " + completeTaskData.status)
+              }
+            }
             );
         });
       }
     })
 
-    async function closeTask(processInstanceId, variables) {
+    async function closeTask(processInstanceId, payload) {
       // Step 2. get active task waiting for completion
-      await sendWorkflowRequest(
-        null,
-        'GET',
-        'task?processInstanceId=' + processInstanceId + '&active=true'
-      )
-      .then((taskData) => {
-        const taskId = taskData[0].id;
-        console.log("2. Task data: " + JSON.stringify(taskData));
-        // Step 3. set authorization type
-        return sendWorkflowRequest(
-          {
-              variables
-          },
-          'POST', 
-          'task/' + taskId + "/complete")
-      })
+      console.log("2. Close Task for process: " + processInstanceId);
+      // Step 3. set authorization type
+      return await sendWorkflowRequest(
+        {
+            payload
+        },
+        'POST', 
+        'instances/' + processInstanceId)
+      
     }
 
     async function sendWorkflowRequest(payload, method, restEndpoint) {
@@ -137,16 +157,7 @@
         }
       )
       .then(function(response) {
-          if (!response.ok) {
-              throw new Error('Errore nella richiesta: ' + response.status);
-          }
-          if (response.status != 204) {
-            return response.json();
-          }
           return response;
-      })
-      .catch(function(error) {
-          console.error('Si è verificato un errore:', error);
       });
   }
   </script>

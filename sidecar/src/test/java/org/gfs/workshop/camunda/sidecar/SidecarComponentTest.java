@@ -6,7 +6,10 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.camunda.kafka.CamundaRequestEvent;
 import org.camunda.kafka.FeedbackRecord;
 import org.camunda.kafka.FeedbackTypeEnum;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,6 +23,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Collections;
@@ -32,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles({"OUTGOING", "INCOMING"})
 @EmbeddedKafka
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @ExtendWith(MockitoExtension.class)
@@ -78,7 +83,7 @@ public class SidecarComponentTest {
         config.put("auto.offset.reset", "earliest");
         Consumer<String, CamundaRequestEvent> consumer = new KafkaConsumer<>(config);
         consumer.subscribe(Collections.singleton(requestTopic));
-        ConsumerRecord<String, CamundaRequestEvent> eventConsumer =KafkaTestUtils.getSingleRecord(consumer, requestTopic);
+        ConsumerRecord<String, CamundaRequestEvent> eventConsumer = KafkaTestUtils.getSingleRecord(consumer, requestTopic);
         assertNotNull(eventConsumer);
         assertEquals(requestEvent, eventConsumer.value());
     }

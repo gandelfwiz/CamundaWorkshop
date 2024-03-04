@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import org.camunda.kafka.CamundaFeedbackEvent;
 import org.camunda.kafka.CamundaRequestEvent;
 import org.gfs.workshop.camunda.sidecar.service.KafkaService;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 @Controller
+@Profile("OUTGOING")
 @RequestMapping("/kafka")
 @AllArgsConstructor
 public class KafkaController {

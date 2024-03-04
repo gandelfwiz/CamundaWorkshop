@@ -10,6 +10,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Headers;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,22 +23,23 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Controller
-@Profile("INCOMING")
+@Profile("OUTGOING")
 
-@RequestMapping("/camunda")
+@RequestMapping("/external-service")
 @RequiredArgsConstructor
-public class CamundaForwarder {
+public class ExternalServiceForwarder {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    @Value("${camunda.server.url}")
-    private String camundaServerUrl;
 
     @RequestMapping(value = "/**", method = {
             RequestMethod.GET, RequestMethod.DELETE, RequestMethod.POST, RequestMethod.PUT, RequestMethod.PATCH
     })
-    public ResponseEntity<?> proxyCamundaRestApi(@RequestBody(required = false) String requestBody,
+    public ResponseEntity<?> proxyExternalServiceRestApi(@RequestBody(required = false) String requestBody,
+                                                 @Header("X-Service-Name") String serviceName,
                                                  HttpServletRequest request) throws JsonProcessingException {
-        String targetUrl = camundaServerUrl +
+        //todo delete
+        serviceName = "SmsSender/external-service";
+        String targetUrl = "http://" + serviceName +
                 "/" + Arrays.stream(request.getRequestURI().split("/"))
                 .skip(2)
                 .collect(Collectors.joining("/"));

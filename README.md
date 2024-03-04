@@ -56,12 +56,13 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 5. [Escalate and call external rest service](#step5)
 6. [Resiliency and Retry](#step6)\
 	I. [BPMN based](#step6-1)\
-	II. [Camunda engine based](#step6-1)
+	II. [Camunda engine based](#step6-2)
 7. [Kafka integration through sidecar pattern](#step7)
 8. [Transaction and compensation](#step8)
 9. [Cross-process interaction](#step9)
 10. [Service mesh integration](#step10)
 11. [Integration with external application](#step11)
+12. [DMN and custom endpoints](#step12)
 
 &nbsp;
 
@@ -688,15 +689,15 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 		  schema:
 			registry:
 			  url: http://localhost:8081
-			  #ssl:
-				#keystore:
-				#  location: src/main/resources/cert.jks
-				#  password: changeit
-				#truststore:
-				#  location: src/main/resources/cert.jks
-				#  password: changeit
-				#key:
-				#  password: changeit
+			  ssl:
+				keystore:
+				  location: src/main/resources/mycert.jks
+				  password: changeit
+				truststore:
+				  location: src/main/resources/mycert.jks
+				  password: changeit
+				key:
+				  password: changeit
 		  spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
 		  spring.deserializer.value.delegate.class: io.confluent.kafka.serializers.KafkaAvroDeserializer
 		  specific.avro.reader: true
@@ -1025,13 +1026,13 @@ The choice in this project is instead to create a Camunda sidecar. This approach
 
 6. You can check if everything works well running the application
 
-	```s
+	```dos
 	mvn spring-boot:run '-Dspring-boot.run.arguments="--server.port=8500"'
 	```	
 
 	and calling it using these curls:
 
-	```s
+	```dos
 	curl -X POST http://localhost:8500/kafka/events/camunda/publishing --data-raw "{\"workflowId\": \"da2fd17b-0d0f-4d00-b88e-13d0361073c1\",\"taskId\": \"7055fb17-b008-4142-98f2-dcf9f4d13dc2\", \"feedbackRequired\": true, \"feedback\":{\"feedbackEvent\":\"AuthorizedByOtherDevice\",\"feedbackType\":\"SIGNAL\"},\"data\": {\"author\":\"gandelfwiz\"}}" -H "Content-Type: application/json"
 
 	curl -X POST http://localhost:8500/kafka/events/feedback/publishing --data-raw "{\"workflowId\": \"7b17db81-d0d0-11ee-a84d-581cf8936878\",\"taskId\": \"7055fb17-b008-4142-98f2-dcf9f4d13dc2\",\"result\": \"OK\",\"timestamp\": \"2023-01-23T01:03:10\",\"componentName\":\"curl\",\"feedback\":{\"feedbackEvent\":\"AuthorizedByOtherDevice\",\"feedbackType\":\"MESSAGE\"},\"data\": {\"author\": \"gandelfwiz\"}}" -H "Content-Type: application/json"
@@ -1319,7 +1320,17 @@ In Camunda is possible to call a process from another external process. The engi
 <div id='step10'/>
 
 ### **Step 10: Service mesh integration**
->In order to integrate Camunda with a service mesh, to keep the technology independency you can create a sidecar that handle registrations and security policies and communicate in localhost with Camunda. 
+>In order to integrate Camunda with a service mesh, to keep the technology independency you can create a sidecar that handle registrations and security policies and communicate in localhost with Camunda. Service mesh rules are inside Ing and they are based on **Merak**, **Peer Token**, **Access Token** and **Service Discovery**.
+
+To make Camunda available in the network you should: 
+
+1) Register an API with the OpenApi definition of Camunda on Touchpoint Portal
+2) Create certificates for the Application
+3) Create a sidecar using the certificates you have created and using the Manifest of your application. The name of Application in certificate should be the same of your Engine. Sidecar will have the following property configured:
+
+	```properties
+	sidecar.meshed-app-port: 8080
+	```
 
 For this workshop we make it more simple. We implement a simple proxy endpoint in our sidecar that when called forward the request to Camunda exactly like a sidecar without the security part.
 
@@ -1336,7 +1347,11 @@ For this workshop we make it more simple. We implement a simple proxy endpoint i
 		private String camundaServerUrl;
 
 		@RequestMapping(value = "/**", method = {
-				RequestMethod.GET, RequestMethod.DELETE, RequestMethod.POST, RequestMethod.PUT, RequestMethod.PATCH
+				RequestMethod.GET, 
+				RequestMethod.DELETE, 
+				RequestMethod.POST, 
+				RequestMethod.PUT, 
+				RequestMethod.PATCH
 		})
 		public ResponseEntity<?> proxyCamundaRestApi(@RequestBody(required = false) String requestBody,
 														HttpServletRequest request) {
@@ -1344,17 +1359,14 @@ For this workshop we make it more simple. We implement a simple proxy endpoint i
 					"/" + Arrays.stream(request.getRequestURI().split("/"))
 					.skip(2)
 					.collect(Collectors.joining("/"));
-			// remove headers else would be duplicated
-			ResponseEntity<Object> response = restTemplate.exchange(targetUrl,
+			return restTemplate.exchange(targetUrl,
 					HttpMethod.valueOf(request.getMethod()),
 					new HttpEntity<>(requestBody),
 					Object.class);
-			return new ResponseEntity<>(response.getBody(), new HttpHeaders(), response.getStatusCode());
-
 		}
 	}
-	```
-
+	```	
+	
 2) Call the following endpoint:
 	```s
 	curl http://localhost:8500/camunda/history/incident
@@ -1370,7 +1382,7 @@ For this workshop we make it more simple. We implement a simple proxy endpoint i
 
 	In this case the port is random and so you can't predict where you have to call the service. In a service mesh environment not just the port isn't predictable, but also the url can be unpredictable.
 
-4) Let's try to create quickly a service discovery to find our service. If all services in network are linked to a service discovery you will have the service mesh. For our experiment download the binary of consul from this page: https://developer.hashicorp.com/consul/install and paste it in *consul/* subfolder
+4) Let's try to create quickly a service discovery to find our service. If all services in network are linked to a service discovery you will have the service mesh. For our experiment download the binary of consul from this page: https://developer.hashicorp.com/consul/install
 
 5) Unzip the archive and from command line run:
 
@@ -1431,8 +1443,6 @@ For this workshop we make it more simple. We implement a simple proxy endpoint i
 	```
 
 This exercise clarifies how the sidecar can integrate Camunda in service mesh. The changes you applied to the sidecar to activate and register the service to service discovery couldn't be applied to Camunda unless you don't embed Camunda libraries in your application creating a strong technology dependency between Camunda and service mesh integration implementation.
-
-&nbsp;
 
 &nbsp;
 
@@ -1769,3 +1779,472 @@ This exercise clarifies how the sidecar can integrate Camunda in service mesh. T
 8) Open and fulfill the page selecting password method. On confirm the NGINX will resolve the host name with the sidecar and the workflow will start.
 
 &nbsp;
+
+<div id='step12'/>
+
+### **Step 12: DMN and custom endpoints**
+
+> In last exercise we have created an external page that calls through a service mesh Camunda Rest Endpoints.\
+	Although this solution is common, this means to expose the workflow manager to the network. We don't have configured the login. Camunda uses by default a basic authentication, but it's possible to extend it with other mechanisms. This is not so easy. While Camunda 8 uses Keycloak to perform authentication and so it is natively opened to any solution, Camunda 7 is not so flexible. In addition to this consideration, if you decide to expose the workflow on the network, you will have to add users, groups and to profile anyone works with the workflow. This means that your architecture would be strongly coupled with Camunda and an eventual migration to other engines would be much complex.
+	For this reason the proposal of the current step is to create a custom endpoint to handle the workflow. The endpoint will abstract as much as possible the workflow and will handle the start of the workflow and the task completion automatically simplifying the integration from the external app and delegating to the sidecar the orchestration of REST services.\
+	Creating the orchestration of the workflow services transparent for the external page and implementing them in sidecar we can remove the first task user and change it with a decision table that applies a rule to route the flow to the correct path.
+
+1. Let's define the interface that we want to use to create a communication between the external page and the workflow.
+	We can define 3 basic actions we want to perform on a workflow:
+	* **CREATION**: start a workflow instance needs just to know the workflow name. In addition we have to send an hashmap with business data the workflow need to run tasks.
+
+		```json
+		POST /workflow/instances
+		{
+			"workflowType": "WORKFLOW_PROCESS",
+			"payload": [
+				{
+					"key": "value1",
+					"value": "value"
+				},
+				{
+					"key": "value2",
+					"value2": 10
+				},
+				{
+					"key": "value3",
+					"value3": true
+				}
+			]
+		}
+		```
+	The response will be just the identification code of the workflow:
+		```json
+		{ 
+		"id": "uuid"
+		}
+		```
+
+	* **UPDATE**: to progress with a process providing new business data the following interface could be enough:
+
+		```json
+		POST /workflow/instances/{UUID}
+		{
+			"workflowType": "WORKFLOW_PROCESS",
+			"eventName": "PasswordProvided",
+			"payload": [
+				{ 
+					"key": "keyname",
+					"value": 10
+				}
+			]
+		}
+		```
+	
+	In this case we have to define a rule to go forward the workflow. Usually the call comes from an external service and the goal of the call could be to complete a user task or to correlate an event that process is waiting. There aren't other cases in which the process is suspended. For this reason we define the eventName field that is optional and that will be provided when the process is waiting a message or signal. 
+
+	* **QUERY**: query the workflow status and variables, could be something like this.
+
+		```json
+		GET /workflow/instances?customerId=&productId=
+		[
+			{
+				"workflowType": "AuthorizationProcess",
+				"id": "uuid1",
+				"payload": {
+				},
+				"tasks": [
+					{
+						"taskName": "taskname",
+						"status": "status"
+					}
+				]
+			},
+			{
+				"workflowType": "DispensationProcess",
+				"id": "uuid2",
+				"payload": {
+				},
+				"tasks": [
+					{
+						"taskName": "taskname",
+						"status": "status"
+					}
+				]
+			}
+		]
+		```
+2. Implement the custom endpoint and define the call to perform towards Camunda. Following is available just a concept sample, the implementation could be a little bit more complicated. In repository you can find a more complex solution in `CamundaService.java`
+
+	* Start a new process
+		```java
+		public WorkflowInstanceDto startNewProcess(WorkflowRequestInstanceDto workflowRequestInstanceDto) {
+			log.info("Start new process to Camunda {}", workflowRequestInstanceDto);
+			try {
+				return restTemplate.postForObject(
+						camundaServerUrl + "/process-definitions/key/" + workflowRequestInstanceDto.getWorkflowType() + "/start",
+						new Object(),
+						WorkflowInstanceDto.class
+				);
+			} catch (Exception e) {
+				log.error("Exception calling Camunda engine: ", e);
+			}
+			return null;
+		}
+		```
+
+	* Call to send a message/signal
+		```java
+		public <T, S> void correlate(T messageDto, Class<S> responseType, TriggerType triggerType) {
+			log.info("Correlate message to Camunda {}", messageDto);
+			try {
+				restTemplate.postForObject(
+						camundaServerUrl + "/" + triggerType.toString().toLowerCase(),
+						messageDto,
+						responseType
+				);
+			} catch (Exception e) {
+				log.error("Exception calling Camunda engine: ", e);
+			}
+		}
+		```
+
+	* Call to complete a task
+		```java
+		public CompleteTaskDto complete(List<String> executionIds, UUID uuid) {
+			log.info("Complete tasks executions {} for process Id {}", executionIds, uuid.toString());
+			try {
+				TaskDto task = restTemplate.getForObject(
+						camundaServerUrl + "/task?processInstanceId=" + uuid + "&active=true",
+						TaskDto.class
+				);
+				if (Objects.nonNull(task) &&
+						Objects.nonNull(executionIds) &&
+						executionIds.contains(task.getExecutionId()))
+
+					return restTemplate.postForObject(
+							camundaServerUrl + "/task/" + uuid + "/complete",
+							new Object(),
+							CompleteTaskDto.class
+					);
+			} catch (Exception e) {
+				log.error("Exception calling Camunda engine: ", e);
+			}
+			return null;
+    	}
+		```
+
+3. Since there is a sidecar that create the interface for external application, it can provide some additional feature. For example, it could detect what is the last step in waiting and in case of `UserTask` type it completes the task with input data received, in case of `CatchingMessageEvent` or `CatchingSignalEvent` the sidecar can correlate the message.
+	This logic is not so complex to implement, following there is an example.
+
+	`WorkflowService.java`
+	
+	```java
+	/**
+	* Route the update process automatically to the task completion or message correlation
+	* @param instance Instance of the process
+	* @param workflowRequestInstanceDto Data
+	* @return Result of execution with process variables
+	*/
+	private WorkflowInstanceDto act(WorkflowInstanceDto instance, WorkflowRequestInstanceDto workflowRequestInstanceDto) {
+		// 1. Retrieve the activity instances of the process instance. In this way you can find
+		//    the type of task that are active and react only for the ones that can trigger a task completion,
+		//    a message or a signal
+		ActivityInstanceDto activity = camundaService.getActivityInstances(instance.getUuid());
+
+		List<PayloadData> data = null;
+
+		// 2. Look for the active element that can be triggered
+		InstanceDto activeInstance = lookForTriggerInElement(activity);
+
+		// 3. Routing of calls to Correlation of signal and message or Task completion
+		if (Objects.nonNull(activeInstance)) {
+			if (Objects.nonNull(workflowRequestInstanceDto.getEventName())) {
+				switch (TriggerOwnedMember.getFromType(activeInstance.getActivityType()).getTriggerType()) {
+					case SIGNAL -> camundaService.correlate(
+							SignalDto.builder()
+									.name(workflowRequestInstanceDto.getEventName())
+									.build(),
+							Void.class,
+							TriggerType.SIGNAL);
+					case MESSAGE -> data = (camundaService.correlate(
+							CorrelationMessageDto.builder()
+									.messageName(workflowRequestInstanceDto.getEventName())
+									.processInstanceId(instance.getUuid().toString())
+									.build(),
+							MessageCorrelationResultWithVariableDto.class,
+							TriggerType.MESSAGE)).getVariables()
+							.entrySet()
+							.stream()
+							.map(entry -> new PayloadData().key(entry.getKey()).value(new PayloadDataValue(entry.getValue().getValue())))
+							.collect(Collectors.toList());
+				}
+			} else if (TriggerType.COMPLETE.equals(TriggerOwnedMember.getFromType(activeInstance.getActivityType()).getTriggerType())) {
+				data = camundaService.complete(workflowRequestInstanceDto, activeInstance.getExecutionIds(), instance.getUuid())
+						.entrySet()
+						.stream()
+						.map(entry -> new PayloadData().key(entry.getKey()).value(new PayloadDataValue(entry.getValue().getValue())))
+						.collect(Collectors.toList());
+			}
+		}
+		return instance.data(data);
+	}
+
+	/**
+	* Look for a possible activity that can trigger a message or a task completion
+	* @param activity The current activity of the process instance
+	* @return An instance object
+	*/
+	private InstanceDto lookForTriggerInElement(ActivityInstanceDto activity) {
+		if (Objects.isNull(activity)) return null;
+
+		// Use an enum to define which elements can trigger a call
+		if (TriggerOwnedMember.isTrigger(activity.getActivityType())) {
+			return activity;
+		}
+
+		// Look into children list
+		if (Objects.isNull(activity.getChildActivityInstances()) &&
+				Objects.isNull(activity.getChildTransitionInstances())) {
+			return null;
+		}
+
+		if (Objects.nonNull(activity.getChildTransitionInstances()) &&
+				!activity.getChildTransitionInstances().isEmpty()) {
+			InstanceDto instanceDto = activity.getChildTransitionInstances()
+					.stream()
+					.filter(instance -> TriggerOwnedMember.isTrigger(instance.getActivityType()))
+					.findFirst()
+					.orElse(null);
+			if (Objects.nonNull(instanceDto)) return instanceDto;
+		}
+
+		// Search in sublist is called
+		return lookForTriggerInList(activity.getChildActivityInstances());
+	}
+
+	/**
+	* Look for a triggerable task or event in process instance
+	* @param childTransitionInstances list of subactivities
+	* @return the instance to trigger
+	*/
+	private InstanceDto lookForTriggerInList(List<ActivityInstanceDto> childTransitionInstances) {
+		return childTransitionInstances.stream()
+				// call recursively the look for trigger for each element
+				.map(this::lookForTriggerInElement)
+				.filter(Objects::nonNull)
+				.filter(instance -> TriggerOwnedMember.isTrigger(instance.getActivityType()))
+				.findFirst()
+				.orElse(null);
+	}
+	```
+
+4. Divide the application in two different profiles:
+	* ***Sidecar incoming***
+		* Registered to service discovery
+		* Random port
+		* Connected to listen Kafka topic
+		* Act as proxy to Camunda from the external world
+		* Configured in *`application-INCOMING.yaml`*
+	* ***Sidecar outgoing***
+		* Look for other services through the service discovery
+		* It is not discoverable, it is reachable only on *localhost*
+		* Static port assigned and used by Camunda to call it
+		* Publish event to Kafka topic
+		* Act as proxy from Camunda to the external world
+		* Configured in *`application-OUTGOING.yaml`*
+	
+	Look to the repository to find the changes applied to springboot to reach this goal.
+
+5. Change the process
+	* Change the user task Select the authorization type and transform it in a Business rule task. Fill the configuration as follows:
+		* **ID**: SelectAuthorizationType
+		* **Type**: DMN
+		* **Decision reference**: AuthorizationTypeDecision
+		* **Binding**: latest
+		* **Result variable**: authorizationTypeResult
+		* **Map decision result**: singleEntry
+		* **Inputs**:
+			* *BiometricEnrolled* with value *${true}*
+			* *AuthorizationTypeRequested* with value *${AuthorizationType}*
+	
+	* Make available to the frontend page the result of password validation adding as **Outputs** the variable *tentativesCounter* with value *`${loopCounter}`*. The native variable `loopCounter` is not public. Finally set the *Execution listeners* for start event with value *`${execution.setVariable("isValid", null)}`*. This fixes an issue in the third tentative.
+
+6. Create DMN table: a DMN table is a decision table that you have to create as a separate diagram and you have to deploy to the process engine. Create a new diagram DMN and compile it as follows:
+
+	![Step 12 Decision Model And Notation: A simple rule to implement](images/DecisionTable.png)
+
+	This diagram describes a decision rule based on two input data, `AuthorizationMethod` that can be *PASSWORD* or *BIOMETRIC* and a flag `BiometricEnrolled` that indicates if the customer is enrolled on a device for biometric identification. The enrollment registry is the Knowledge Source which the BiometricEnrolled flag refers to.	
+
+	In the previous step input data were populated as INPUTS of the task that reference the table. The diagram in Camunda for DMN is just a graphic representation, no element is executable but the decision element that in the diagram is name AuthorizationTypeDecision. In BPM process you refer to the ID of the diagram and not to the table.
+
+	The table is configured as follows:
+
+	![Step 12 Decision Table: rules](images/DecisionRules.png)
+
+	In When and And columns there are the conditions of the two data input, in Then you have the result.
+	In this case we have instructed the table with the following rules:
+	* If customer wants to use a Password or Biometric means, but he wasn't previously enrolled to the Biometric authorization he will be directed to the PASSWORD flow
+	* If customer wants to use the Password and was already enrolled to biometric identification allow the Password
+	* If customer wants to use the Biometric device needs to be already enrolled. 
+
+7. Deploy decision table and authorization process to Camunda. Change the html page with as follows:
+
+	* Adapt the payload data in `confirmOperation`:
+
+		```javascript
+		async confirmOperation() {
+			const amount = this.querySelector('#amount').value;
+			const authMethod = this.querySelector('#authMethod').value;
+
+			try {
+			var processInstanceId;
+			// Step 1. create process instance
+			sendWorkflowRequest(
+				{
+				"workflowType": "AuthorizationProcess",
+				"payload": [
+					{
+					"key": "AuthorizationType",
+					"value": authMethod
+					}
+				]
+				},
+				'POST', 
+				'instances')
+				.then((response) => {
+				if (response.status != 204 && response.status < 300) {
+					response.json()
+					.then((responseBody) => {
+					processInstanceId = responseBody.uuid;
+					console.log("1. Process data: " + JSON.stringify(responseBody));
+					if (authMethod == "PASSWORD") {
+						this.innerHTML = "<inserisci-password processInstanceId='"
+								+ processInstanceId + "'></inserisci-password>";
+					} else {
+						alert("Completa l'operazione sull'altro dispositivo");
+					}
+					});
+				}               
+				})
+			} catch (error) {
+			console.error('Si è verificato un errore:', error);
+			alert('Si è verificato un errore durante l\'autorizzazione dell\'operazione');
+			}
+		}
+		```
+
+	* Add a label for password invalid to inserisci-password web component and set up the new logic and the usage of process variables:
+
+		```javascript
+		customElements.define("inserisci-password", class extends HTMLElement {
+		async connectedCallback() {
+			const processInstanceId = this.getAttribute("processInstanceId");
+			this.innerHTML = `
+				<div>
+					<h2 class="title">Conferma Password</h2>
+					<form id="passwordForm">
+						<label for="password">Password:</label>
+						<input type="input-field" type="password" id="password" name="password" required>
+						<span id="invalidPasswordLabel" style="color: red; display: none;">
+						Invalid Password
+						</span>
+						<br>
+						<button class="button" id="confirmBtn" type="submit">Conferma</button>
+					</form>
+				</div>
+			`;
+			this.querySelector('#passwordForm').addEventListener('submit', (event) => {
+				event.preventDefault();
+				const password = this.querySelector('#password').value;
+				closeTask( processInstanceId,
+				[ {
+					'key': 'password',
+					'value' : String(password)
+					}
+				]
+				).then((completeTaskData) => {
+						console.log("3. Task completion data: " + (completeTaskData == null ? null : 
+													JSON.stringify(completeTaskData)));
+				if (completeTaskData.status < 300) {
+					completeTaskData.json()
+					.then((result) => {
+					const isValid = result.data.filter((key) => key.key == "isValid");
+					if (isValid.length > 0 &&
+						isValid[0].value) {
+						this.innerHTML = '<h1 class="title">Operazione Autorizzata con successo</h1>';
+					} else {
+						const passwordStatus = result.data.filter((key) => key.key == "passwordError");
+						if (passwordStatus.length > 0 &&
+						passwordStatus[0].value == "PasswordLocked") {
+							invalidPasswordLabel.textContent = "Too many errors, password is locked.";
+						document.getElementById("confirmBtn").disabled = true;
+						} else {
+						invalidPasswordLabel.textContent = "Invalid Password. You have still " + 
+							(2 - result.data.filter((key) => key.key == "tentativesCounter")[0].value)
+							+ " tentatives.";
+						}
+						invalidPasswordLabel.style.display = 'inline';
+					}
+					})
+				} else {
+					console.log("Error in call " + completeTaskData.status)
+				}
+				}
+				);
+			});
+		}
+		})
+		```
+
+	* Finally adjust the 2 functions to call the sidecar as follows:
+
+		```javascript
+		async function closeTask(processInstanceId, payload) {
+		// Step 2. get active task waiting for completion
+		console.log("2. Close Task for process: " + processInstanceId);
+		// Step 3. set authorization type
+		return await sendWorkflowRequest(
+			{
+				payload
+			},
+			'POST', 
+			'instances/' + processInstanceId)
+		
+		}
+
+		async function sendWorkflowRequest(payload, method, restEndpoint) {
+		return await fetch('http://localhost/workflow/' + restEndpoint, {
+			method: method,
+			headers: {
+				'Content-Type': 'application/json',
+				'Accept': 'application/json'
+			},
+			body: (method != "GET") ? JSON.stringify(payload) : null
+			}
+		)
+		.then(function(response) {
+			return response;
+		});
+	}
+	```
+ 
+8. Let's try everything. Run the following commands:
+	```s
+	# start the sidecar
+	java -Dserver.port=0 -jar sidecar-0.0.1-SNAPSHOT.jar --spring.profiles.active=INCOMING
+	
+	java -Dserver.port=8900 -jar sidecar-0.0.1-SNAPSHOT.jar --spring.profiles.active=OUTGOING
+
+	{camunda-bpm-run-7.20.0}/start.bat  
+
+	{consul_folder}/consul.exe agent -dev -config-file=config.json
+	
+	{consul_template_folder}/consul-template.exe -config consul_template.hcl
+
+	{nginx_folder}/nginx.exe
+	```
+
+	Go to the following url:
+
+	```
+	http://localhost:8100
+	```
+
+	and play with the page. Remember that to trigger the SMS you have to change the external service as done in the repository to include the service discovery integration with rest template. You should add the dependency to `spring-cloud-consul` and setup the application.yaml as done for the sidecar.
+

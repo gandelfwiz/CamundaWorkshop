@@ -16,5 +16,5 @@ public class ProcessInstanceDto {
     private Boolean ended;
     private Boolean suspended;
     private String tenantId;
-    private List<AtomLink> links;
+    private LinkableDto links;
 }

@@ -1,10 +1,10 @@
 kafka:
   request-topic: workshop_camunda_request_topic
   feedback-topic: workshop_camunda_feedback_topic
+  autostartup: true
 
 spring:
   kafka:
-    # ING TPA Kafka environment
     bootstrap-servers: localhost:9092
     properties:
       schema:

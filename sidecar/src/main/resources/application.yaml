@@ -1,8 +1,10 @@
-kafka:
-  request-topic: workshop_camunda_request_topic
-  feedback-topic: workshop_camunda_feedback_topic
-  autostartup: false
 spring:
+  profiles:
+    default: OUTGOING
+  http:
+    log-request-details: true
+  application:
+    name: CamundaSidecar
   kafka:
     bootstrap-servers: localhost:9092
     properties:
@@ -11,44 +13,16 @@ spring:
           url: http://localhost:8081
           ssl:
             keystore:
-              location: src/main/resources/cert.jks
-              password: publicpass
+              location: src/main/resources/mycert.jks
+              password: changeit
             truststore:
-              location: src/main/resources/cert.jks
-              password: publicpass
+              location: src/main/resources/mycert.jks
+              password: changeit
             key:
-              password: publicpass
+              password: changeit
       spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
       spring.deserializer.value.delegate.class: io.confluent.kafka.serializers.KafkaAvroDeserializer
       specific.avro.reader: true
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
-    consumer:
-      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-      group-id: camunda-sidecar-local
-      auto-offset-reset: earliest
-    auto.register.schema: false
-  http:
-    log-request-details: true
-  cloud:
-    consul:
-      host: localhost
-      port: 8500
-      discovery:
-        enabled: true
-        register: true
-        deregister: true
-        #health-check-interval: 5s
-        #health-check-path: /health/check
-        #health-check-critical-timeout: 10s
-        #instance-id: ${spring.application.name}:${vcap.application.instance_id:${spring.application.instance_id:${random.value}}}
-        heartbeat:
-          enabled: true
-          ttl: 5s
-  application:
-    name: CamundaSidecar
-camunda:
-  server:
-    url: http://localhost:8080/engine-rest
+  mvc:
+    problemdetails:
+      enabled: true

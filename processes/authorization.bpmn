@@ -8,18 +8,6 @@
     <bpmn:endEvent id="Event_0nbrcot">
       <bpmn:incoming>Flow_1b0qixs</bpmn:incoming>
     </bpmn:endEvent>
-    <bpmn:userTask id="SelectAuthorizationType" name="Select the authorization type">
-      <bpmn:extensionElements>
-        <camunda:formData>
-          <camunda:formField id="authorizationType" label="Authorization Type" type="enum">
-            <camunda:value id="PASSWORD" name="Password" />
-            <camunda:value id="BIOMETRIC" name="Biometric" />
-          </camunda:formField>
-        </camunda:formData>
-      </bpmn:extensionElements>
-      <bpmn:incoming>Flow_14c2ir8</bpmn:incoming>
-      <bpmn:outgoing>Flow_02hv2i9</bpmn:outgoing>
-    </bpmn:userTask>
     <bpmn:sequenceFlow id="Flow_02hv2i9" sourceRef="SelectAuthorizationType" targetRef="Gateway_0px812s" />
     <bpmn:exclusiveGateway id="Gateway_0px812s">
       <bpmn:incoming>Flow_02hv2i9</bpmn:incoming>
@@ -28,10 +16,10 @@
     </bpmn:exclusiveGateway>
     <bpmn:sequenceFlow id="Flow_0bw2326" sourceRef="subProcessOtherDevice" targetRef="Gateway_0mx8n6w" />
     <bpmn:sequenceFlow id="biometricFlow" name="biometric" sourceRef="Gateway_0px812s" targetRef="subProcessOtherDevice">
-      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${authorizationType == "BIOMETRIC"}</bpmn:conditionExpression>
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${authorizationTypeResult == "BIOMETRIC"}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="passwordFlow" name="password" sourceRef="Gateway_0px812s" targetRef="LoopActivity">
-      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${authorizationType == "PASSWORD"}</bpmn:conditionExpression>
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${authorizationTypeResult == "PASSWORD"}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:exclusiveGateway id="Gateway_0mx8n6w">
       <bpmn:incoming>Flow_1cf1ukx</bpmn:incoming>
@@ -72,7 +60,7 @@
                 "feedbackType": "MESSAGE"
         },
 	"data": {
-		"author": "CA34ED"
+		"author": "gandelfwiz"
 	}
 }
 
@@ -151,6 +139,12 @@ JSON.stringify(payload);</camunda:script>
         <bpmn:incoming>Flow_1mgesij</bpmn:incoming>
       </bpmn:endEvent>
       <bpmn:serviceTask id="ValidatePasswordService" name="Validate password" camunda:expression="${execution.getVariable(&#34;password&#34;).equals(&#34;111111&#34;)}" camunda:resultVariable="isValid">
+        <bpmn:extensionElements>
+          <camunda:inputOutput>
+            <camunda:outputParameter name="tentativesCounter">${loopCounter}</camunda:outputParameter>
+          </camunda:inputOutput>
+          <camunda:executionListener expression="${execution.setVariable(&#34;isValid&#34;, null)}" event="start" />
+        </bpmn:extensionElements>
         <bpmn:incoming>Flow_1xto3js</bpmn:incoming>
         <bpmn:outgoing>Flow_1mgesij</bpmn:outgoing>
       </bpmn:serviceTask>
@@ -176,6 +170,7 @@ JSON.stringify(payload);</camunda:script>
       </bpmn:boundaryEvent>
       <bpmn:sequenceFlow id="Flow_1sa08nw" sourceRef="ErrorCondition" targetRef="ThrowError" />
       <bpmn:endEvent id="ThrowError" name="Password locked">
+        <bpmn:extensionElements />
         <bpmn:incoming>Flow_1sa08nw</bpmn:incoming>
         <bpmn:errorEventDefinition id="ErrorEventDefinition_07h9yp6" errorRef="Error_0ytrhs7" />
       </bpmn:endEvent>
@@ -215,6 +210,7 @@ JSON.stringify(payload);</camunda:script>
                 <camunda:map>
                   <camunda:entry key="Content-Type">application/json</camunda:entry>
                   <camunda:entry key="Accept">application/json</camunda:entry>
+                  <camunda:entry key="X-Service-Name">SmsSender</camunda:entry>
                 </camunda:map>
               </camunda:inputParameter>
               <camunda:inputParameter name="method">POST</camunda:inputParameter>
@@ -252,12 +248,23 @@ JSON.stringify(payload);</camunda:script>
         <bpmn:script>java.lang.System.out.println("Result of sending: " + execution.getVariable("resultSms"));</bpmn:script>
       </bpmn:scriptTask>
     </bpmn:subProcess>
+    <bpmn:businessRuleTask id="SelectAuthorizationType" name="Select the authorization type" camunda:resultVariable="authorizationTypeResult" camunda:decisionRef="AuthorizationTypeDecision" camunda:mapDecisionResult="singleEntry">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="BiometricEnrolled">${true}</camunda:inputParameter>
+          <camunda:inputParameter name="AuthorizationTypeRequested">${AuthorizationType}</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_14c2ir8</bpmn:incoming>
+      <bpmn:outgoing>Flow_02hv2i9</bpmn:outgoing>
+    </bpmn:businessRuleTask>
   </bpmn:process>
   <bpmn:message id="Message_0dfqafp" name="PasswordIsValid" />
   <bpmn:error id="Error_0ytrhs7" name="PasswordLocked" errorCode="PasswordLocked" camunda:errorMessage="Password was locked!" />
   <bpmn:escalation id="Escalation_11qamde" name="WarnCustomer" escalationCode="warn" />
   <bpmn:message id="Message_188njke" name="AuthorizedByOtherDevice" />
   <bpmn:error id="Error_1u1bxwg" name="Timeout" errorCode="408" camunda:errorMessage="Too long to give the authorization" />
+  <bpmn:error id="Error_0f4e267" name="PasswordIsInvalid" errorCode="PasswordIsInvalid" camunda:errorMessage="Password is wrong" />
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="AuthorizationProcess">
       <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
@@ -265,9 +272,6 @@ JSON.stringify(payload);</camunda:script>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_0nbrcot_di" bpmnElement="Event_0nbrcot">
         <dc:Bounds x="1082" y="199" width="36" height="36" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_1392rb0_di" bpmnElement="SelectAuthorizationType">
-        <dc:Bounds x="270" y="177" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_0px812s_di" bpmnElement="Gateway_0px812s" isMarkerVisible="true">
         <dc:Bounds x="445" y="192" width="50" height="50" />
@@ -294,23 +298,23 @@ JSON.stringify(payload);</camunda:script>
       <bpmndi:BPMNShape id="Activity_10fzwc4_di" bpmnElement="ValidatePasswordService">
         <dc:Bounds x="710" y="390" width="100" height="80" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Event_1ehk8af_di" bpmnElement="SendPasswordIsValid">
-        <dc:Bounds x="812" y="522" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="788" y="565" width="84" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_0f28q6d_di" bpmnElement="ThrowError">
         <dc:Bounds x="682" y="522" width="36" height="36" />
         <bpmndi:BPMNLabel>
           <dc:Bounds x="658" y="565" width="84" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Event_17oe5zm_di" bpmnElement="ErrorCondition">
-        <dc:Bounds x="722" y="452" width="36" height="36" />
+      <bpmndi:BPMNShape id="Event_1ehk8af_di" bpmnElement="SendPasswordIsValid">
+        <dc:Bounds x="842" y="522" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="818" y="565" width="84" height="14" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_01aj7n8_di" bpmnElement="ValidCondition">
-        <dc:Bounds x="772" y="452" width="36" height="36" />
+        <dc:Bounds x="792" y="452" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_17oe5zm_di" bpmnElement="ErrorCondition">
+        <dc:Bounds x="742" y="452" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_17exb1f_di" bpmnElement="Flow_17exb1f">
         <di:waypoint x="498" y="430" />
@@ -328,13 +332,13 @@ JSON.stringify(payload);</camunda:script>
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_02u73l5_di" bpmnElement="Flow_02u73l5">
-        <di:waypoint x="790" y="488" />
-        <di:waypoint x="790" y="540" />
-        <di:waypoint x="812" y="540" />
+        <di:waypoint x="810" y="488" />
+        <di:waypoint x="810" y="540" />
+        <di:waypoint x="842" y="540" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_1sa08nw_di" bpmnElement="Flow_1sa08nw">
-        <di:waypoint x="740" y="488" />
-        <di:waypoint x="740" y="540" />
+        <di:waypoint x="760" y="488" />
+        <di:waypoint x="760" y="540" />
         <di:waypoint x="718" y="540" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNShape id="Event_1pmuidv_di" bpmnElement="Event_1pmuidv">
@@ -377,6 +381,9 @@ JSON.stringify(payload);</camunda:script>
         <di:waypoint x="660" y="870" />
         <di:waypoint x="730" y="870" />
       </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Activity_08xjb69_di" bpmnElement="SelectAuthorizationType">
+        <dc:Bounds x="270" y="177" width="100" height="80" />
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_1gg8rd7_di" bpmnElement="CatchPasswordLockedError">
         <dc:Bounds x="732" y="592" width="36" height="36" />
         <bpmndi:BPMNLabel>

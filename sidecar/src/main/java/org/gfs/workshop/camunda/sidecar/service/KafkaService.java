@@ -7,46 +7,31 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.camunda.kafka.CamundaFeedbackEvent;
 import org.camunda.kafka.CamundaRequestEvent;
 import org.camunda.kafka.ResultEnum;
-import org.gfs.workshop.camunda.sidecar.model.camunda.CorrelationMessageDto;
-import org.gfs.workshop.camunda.sidecar.model.camunda.MessageCorrelationResultWithVariableDto;
-import org.gfs.workshop.camunda.sidecar.model.camunda.SignalDto;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 
 @Service
+@Profile("OUTGOING")
 @RequiredArgsConstructor
 @Slf4j
 public class KafkaService {
 
     private final KafkaTemplate<String, SpecificRecord> kafkaTemplate;
-    private final RestTemplate restTemplate;
-    private final Function<CamundaFeedbackEvent, CorrelationMessageDto> mapFeedbackEventToCorrelationMessage =
-            feedbackEvent ->
-                    CorrelationMessageDto.builder()
-                            .messageName(feedbackEvent.getFeedback().getFeedbackEvent())
-                            .processInstanceId(feedbackEvent.getWorkflowId())
-                            .build();
-
-    private final Function<CamundaFeedbackEvent, SignalDto> mapFeedbackEventToCorrelationSignal =
-            feedbackEvent ->
-                    SignalDto.builder()
-                            .name(feedbackEvent.getFeedback().getFeedbackEvent())
-                            .build();
-    @Value("${camunda.server.url}")
-    private String camundaServerUrl;
 
     @Value("${kafka.request-topic}")
     private String requestTopic;
+
+    @Value("${kafka.feedback-topic}")
+    private String feedbackTopic;
 
     /**
      * Implement /kafka/events/camunda/publishing
@@ -64,7 +49,7 @@ public class KafkaService {
      * @param requestEvent a feedback event for Camunda
      */
     public void publishFeedbackForCamundaEvent(CamundaFeedbackEvent requestEvent) {
-        sendEvent("workshop_camunda_feedback_topic", requestEvent);
+        sendEvent(feedbackTopic, requestEvent);
     }
 
     /**
@@ -87,25 +72,6 @@ public class KafkaService {
             }
         });
     }
-
-    /**
-     * Message listener of Feedbacks. Call Camunda only when a feedback is provided
-     *
-     * @param feedbackEvent feedback event for Camunda received from topic
-     */
-    @KafkaListener(topics = "${kafka.feedback-topic}", autoStartup = "${kafka.autostartup}")
-    public void feedbackHandler(CamundaFeedbackEvent feedbackEvent) {
-        log.info("Received message {}", feedbackEvent);
-        if (Objects.nonNull(feedbackEvent.getFeedback())) {
-            switch (feedbackEvent.getFeedback().getFeedbackType()) {
-                case SIGNAL -> callCamunda(mapFeedbackEventToCorrelationSignal.apply(feedbackEvent),
-                        Void.class);
-                case MESSAGE -> callCamunda(mapFeedbackEventToCorrelationMessage.apply(feedbackEvent),
-                        MessageCorrelationResultWithVariableDto.class);
-            }
-        }
-    }
-
 
     /**
      * Message listener of Request coming from camunda. This is a mock of third party service.
@@ -135,18 +101,5 @@ public class KafkaService {
                 throw new RuntimeException(e);
             }
         });
-    }
-
-    private <T, S> void callCamunda(T messageDto, Class<S> responseType) {
-        log.info("Correlate message to Camunda {}", messageDto);
-        try {
-            restTemplate.postForObject(
-                    camundaServerUrl + "/message",
-                    messageDto,
-                    responseType
-            );
-        } catch (Exception e) {
-            log.error("Exception calling Camunda engine: ", e);
-        }
     }
 }

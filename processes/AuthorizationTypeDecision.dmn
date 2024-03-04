@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" xmlns:dmndi="https://www.omg.org/spec/DMN/20191111/DMNDI/" xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/" xmlns:modeler="http://camunda.org/schema/modeler/1.0" xmlns:camunda="http://camunda.org/schema/1.0/dmn" xmlns:di="http://www.omg.org/spec/DMN/20180521/DI/" id="AuthorizationTypeDecisionDrd" name="DRD" namespace="http://camunda.org/schema/1.0/dmn" exporter="Camunda Modeler" exporterVersion="5.20.0" modeler:executionPlatform="Camunda Platform" modeler:executionPlatformVersion="7.20.0">
+  <decision id="AuthorizationTypeDecision" name="AuthorizationTypeDecision" camunda:historyTimeToLive="P1D">
+    <informationRequirement id="InformationRequirement_1jbv16q">
+      <requiredInput href="#InputData_0645dih" />
+    </informationRequirement>
+    <informationRequirement id="InformationRequirement_1ntpyuy">
+      <requiredInput href="#InputData_051ou3z" />
+    </informationRequirement>
+    <knowledgeRequirement id="KnowledgeRequirement_1wwfhg5">
+      <requiredKnowledge href="#CustomerBiometricEnrollmentRegistry" />
+    </knowledgeRequirement>
+    <decisionTable id="DecisionTable_1ju6qj0">
+      <input id="Input_1" label="AuthorizationTypeRequested" camunda:inputVariable="AuthorizationTypeRequested">
+        <inputExpression id="InputExpression_1" typeRef="string">
+          <text></text>
+        </inputExpression>
+        <inputValues id="UnaryTests_0u6etc3">
+          <text>"PASSWORD","BIOMETRIC"</text>
+        </inputValues>
+      </input>
+      <input id="InputClause_0fru9bv" label="BiometricEnrolled" camunda:inputVariable="BiometricEnrolled">
+        <inputExpression id="LiteralExpression_1ncapc4" typeRef="boolean" expressionLanguage="feel">
+          <text></text>
+        </inputExpression>
+      </input>
+      <output id="Output_1" label="Method" name="Method" typeRef="string">
+        <outputValues id="UnaryTests_1agpzb3">
+          <text>"PASSWORD","BIOMETRIC"</text>
+        </outputValues>
+      </output>
+      <rule id="DecisionRule_1qmkn52">
+        <inputEntry id="UnaryTests_1prazok">
+          <text>"PASSWORD","BIOMETRIC"</text>
+        </inputEntry>
+        <inputEntry id="UnaryTests_03mrspw">
+          <text>false</text>
+        </inputEntry>
+        <outputEntry id="LiteralExpression_1lbl55h">
+          <text>"PASSWORD"</text>
+        </outputEntry>
+      </rule>
+      <rule id="DecisionRule_0r9nr97">
+        <inputEntry id="UnaryTests_039df6r">
+          <text>"PASSWORD"</text>
+        </inputEntry>
+        <inputEntry id="UnaryTests_1oq78cu">
+          <text>true</text>
+        </inputEntry>
+        <outputEntry id="LiteralExpression_1kisfxx">
+          <text>"PASSWORD"</text>
+        </outputEntry>
+      </rule>
+      <rule id="DecisionRule_1shl14t">
+        <inputEntry id="UnaryTests_0bguqc4">
+          <text>"BIOMETRIC"</text>
+        </inputEntry>
+        <inputEntry id="UnaryTests_0en7uan">
+          <text>true</text>
+        </inputEntry>
+        <outputEntry id="LiteralExpression_0f8fawx">
+          <text>"BIOMETRIC"</text>
+        </outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+  <inputData id="InputData_0645dih" name="AuthorizationMethod" />
+  <inputData id="InputData_051ou3z" name="BiometricEnrolled" />
+  <businessKnowledgeModel id="CustomerBiometricEnrollmentRegistry" name="Customer biometric enrollment registry" />
+  <dmndi:DMNDI>
+    <dmndi:DMNDiagram>
+      <dmndi:DMNShape dmnElementRef="AuthorizationTypeDecision">
+        <dc:Bounds height="80" width="180" x="220" y="100" />
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="DMNShape_165qav9" dmnElementRef="InputData_0645dih">
+        <dc:Bounds height="45" width="125" x="157" y="277" />
+      </dmndi:DMNShape>
+      <dmndi:DMNEdge id="DMNEdge_1byzdr7" dmnElementRef="InformationRequirement_1jbv16q">
+        <di:waypoint x="220" y="277" />
+        <di:waypoint x="280" y="200" />
+        <di:waypoint x="280" y="180" />
+      </dmndi:DMNEdge>
+      <dmndi:DMNShape id="DMNShape_07xk84r" dmnElementRef="InputData_051ou3z">
+        <dc:Bounds height="45" width="125" x="368" y="278" />
+      </dmndi:DMNShape>
+      <dmndi:DMNEdge id="DMNEdge_1hqiqvd" dmnElementRef="InformationRequirement_1ntpyuy">
+        <di:waypoint x="431" y="278" />
+        <di:waypoint x="340" y="200" />
+        <di:waypoint x="340" y="180" />
+      </dmndi:DMNEdge>
+      <dmndi:DMNShape id="DMNShape_17iawb2" dmnElementRef="CustomerBiometricEnrollmentRegistry">
+        <dc:Bounds height="46" width="135" x="472" y="117" />
+      </dmndi:DMNShape>
+      <dmndi:DMNEdge id="DMNEdge_0vujqid" dmnElementRef="KnowledgeRequirement_1wwfhg5">
+        <di:waypoint x="472" y="140" />
+        <di:waypoint x="400" y="140" />
+      </dmndi:DMNEdge>
+    </dmndi:DMNDiagram>
+  </dmndi:DMNDI>
+</definitions>

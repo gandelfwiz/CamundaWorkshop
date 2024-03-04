@@ -1,0 +1,216 @@
+openapi: 3.0.2
+info:
+  title: Camunda Incoming Sidecar
+  description: OpenApi Spec for Camunda Incoming Sidecar
+  version: 1.0.0
+  license:
+    name: Apache License 2.0
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+servers:
+  - url: 'http://{host}:{port}/{contextPath}'
+    description: The API server for incoming sidecar
+    variables:
+      host:
+        default: localhost
+      port:
+        default: '8080'
+      contextPath:
+        default: workflow
+tags:
+  - name: Operations
+paths:
+  /instances:
+    post:
+      operationId: createWorkflowInstance
+      tags:
+        - Operations
+      summary: Create Instance
+      description: >-
+        Create Workflow instance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInstanceDto'
+            examples:
+              example1:
+                summary: Request to create new instance
+                value:
+                  - workflowType: "FUEL_DELIVERY_PROCESS"
+                    payload:
+                      - key: 'amount'
+                        value: 10
+                      - key: 'currency'
+                        value: 'EUR'
+                      - key: 'authorizationMethod'
+                        value: 'PASSWORD'
+      responses:
+        '201':
+          description: workflow instance created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceDto'
+
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExceptionDto'
+          description: >-
+            The authorization could not be updated due to an internal server
+            error. See the
+
+            [Introduction](https://docs.camunda.org/manual/7.20/reference/rest/overview/#error-handling)
+
+            for the error response format.
+  /instances/{uuid}:
+    post:
+      operationId: updateWorkflowInstance
+      tags:
+        - Operations
+      summary: Create Instance
+      description: >-
+        Create Workflow instance
+      parameters:
+        - name: uuid
+          in: path
+          schema:
+            type: string
+            format: uuid
+          description: Identification code of workflow instance
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowRequestInstanceDto'
+            examples:
+              example1:
+                summary: Request to update an existing instance
+                value:
+                  - eventName: "AuthorizationProvided"
+                    payload:
+                      - key: 'amount'
+                        value: 10
+                      - key: 'currency'
+                        value: 'EUR'
+                      - key: 'authorizationMethod'
+                        value: 'PASSWORD'
+      responses:
+        '200':
+          description: workflow instance updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowInstanceDto'
+
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExceptionDto'
+          description: >-
+            The authorization could not be updated due to an internal server
+            error. See the
+
+            [Introduction](https://docs.camunda.org/manual/7.20/reference/rest/overview/#error-handling)
+
+            for the error response format.
+components:
+  schemas:
+
+    ExceptionDto:
+      title: ExceptionDto
+      type: object
+      properties:
+        type:
+          type: string
+          nullable: true
+          description: An exception class indicating the occurred error.
+        message:
+          type: string
+          nullable: true
+          description: A detailed message of the error.
+        code:
+          type: number
+          description: >-
+            The code allows your client application to identify the error in an
+            automated fashion.
+
+            You can look up the meaning of all built-in codes and learn how to
+            add custom codes
+
+            in the [User
+            Guide](https://docs.camunda.org/manual/7.20/user-guide/process-engine/error-handling/#exception-codes).
+      additionalProperties: false
+
+    CreateInstanceDto:
+      description: Request to create Instance of Workflow. For creation workflowType is mandatory
+      required:
+        - workflowType
+      allOf:
+        - $ref: '#/components/schemas/WorkflowRequestInstanceDto'
+
+    WorkflowRequestInstanceDto:
+      description: Creation object to run a new instance of a workflow
+      type: object
+      properties:
+        workflowType:
+          type: string
+          nullable: true
+          description: >-
+            The date for which the instances shall be removed. Value may not be
+            `null`.
+            **Note:** Cannot be set in conjunction with `clearedRemovalTime` or
+            `calculatedRemovalTime`.
+        eventName:
+          type: string
+          nullable: true
+          description: >-
+            Indicate the message to correlate. Based on the active task it defines the type of message 
+            to correlate.
+        payload:
+          description: business data to use in workflow
+          nullable: true
+          type: array
+          items:
+            $ref: '#/components/schemas/PayloadData'
+      additionalProperties: false
+
+    PayloadData:
+      description: business data composed by key and value
+      type: object
+      nullable: false
+      properties:
+        key:
+          description: name of the data property
+          nullable: false
+          type: string
+        value:
+          description: value of the data property
+          nullable: false
+          anyOf:
+            - type: integer
+            - type: string
+            - type: boolean
+            - type: array
+              items:
+                type: string
+      additionalProperties: false
+
+    WorkflowInstanceDto:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          nullable: false
+          description: >-
+            identification code of the process instance
+        data:
+          description: business data returns by workflows
+          nullable: true
+          type: array
+          items:
+            $ref: '#/components/schemas/PayloadData'

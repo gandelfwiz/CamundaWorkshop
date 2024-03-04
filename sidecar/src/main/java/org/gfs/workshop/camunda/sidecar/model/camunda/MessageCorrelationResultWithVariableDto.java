@@ -39,9 +39,9 @@ public class MessageCorrelationResultWithVariableDto {
         }
     }
 
-    private ResultTypeEnum resultType = null;
-    private ProcessInstanceDto processInstance = null;
-    private ExecutionDto execution = null;
-    private Map<String, VariableValueDto> variables = null;
+    private ResultTypeEnum resultType;
+    private ProcessInstanceDto processInstance;
+    private ExecutionDto execution;
+    private Map<String, VariableValueDto> variables;
 
 }
