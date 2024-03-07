@@ -64,6 +64,7 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 11. [Integration with external application](#step11)
 12. [DMN and custom endpoints](#step12)
 13. [Working with external business data](#step13)
+14. [Externalize logs in kafka for connection to ELK](#step14)
 
 &nbsp;
 
@@ -247,7 +248,7 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 1. As first step you have to download a new spring boot project. Use the following command or paste the url in your browser:
 
 	```
-	curl "https://start.spring.io/starter.zip?type=maven-project&language=java&bootVersion=3.2.2&baseDir=externalservice&groupId=org.gfs.workshop.camunda.rest&artifactId=externalservice&name=externalservice&description=External%20Service%20called%20by%20Camunda%20Workflow&packageName=org.gfs.workshop.camunda.rest.externalservice&packaging=jar&javaVersion=17&dependencies=lombok,web" --output externalservice.zip
+	curl "https://start.spring.io/starter.zip?type=maven-project&language=java&bootVersion=3.2.2&baseDir=externalservice&groupId=ing.feng.workshop.camunda.rest&artifactId=externalservice&name=externalservice&description=External%20Service%20called%20by%20Camunda%20Workflow&packageName=ing.feng.workshop.camunda.rest.externalservice&packaging=jar&javaVersion=17&dependencies=lombok,web" --output externalservice.zip
 	```
 	
 	Then unzip the archive and open it in IntelliJ
@@ -2574,11 +2575,447 @@ This exercise clarifies how the sidecar can integrate Camunda in service mesh. T
 10. Now try the page: when you select BIOMETRIC with Gilda the page will show the `inserisci-password` web component. Instead when you select BIOMETRIC with Matteo and Roberto the page will show the alert to approve the operation from the other device.
 When you select PASSWORD with each of them the password will work as expected.
 
+&nbsp;
 
+<div id='step14'/>
 
+### **Step 14: Logging**
 
+&nbsp;
 
+1) To externalize logging and write it on Kafka in order to collect logs and eventually analyze them with tools like ELK, you should create an external library that will run in the same jvm of Camunda. To do this, let's create a new maven project in intellij. Change the `pom.xml` as follows:
 
+	```xml
+	<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+		<modelVersion>4.0.0</modelVersion>
 
+		<groupId>org.gfs.workshop.camunda.logging</groupId>
+		<artifactId>KafkaLoggerAppender</artifactId>
+		<version>1.0-SNAPSHOT</version>
+		<packaging>jar</packaging>
 
+		<name>KafkaLoggerAppender</name>
+		<url>http://maven.apache.org</url>
+		<properties>
+			<java.version>17</java.version>
+			<kafka-avro-serializer.version>7.5.1</kafka-avro-serializer.version>
+			<avro-maven-plugin.version>1.11.3</avro-maven-plugin.version>
+			<maven.compiler.source>17</maven.compiler.source>
+			<maven.compiler.target>17</maven.compiler.target>
+		</properties>
+
+		<!-- aligned with Camunda 7.20 -->
+		<dependencyManagement>
+			<dependencies>
+				<dependency>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-dependencies</artifactId>
+					<version>3.2.2</version>
+					<type>pom</type>
+					<scope>import</scope>
+				</dependency>
+				<dependency>
+					<groupId>org.camunda.bpm</groupId>
+					<artifactId>camunda-bom</artifactId>
+					<version>7.20.0</version>
+					<scope>import</scope>
+					<type>pom</type>
+				</dependency>
+			</dependencies>
+		</dependencyManagement>
+
+		<dependencies>
+			<!-- aligned with Camunda 7.20 -->
+			<dependency>
+				<groupId>org.camunda.bpm</groupId>
+				<artifactId>camunda-engine</artifactId>
+				<scope>provided</scope>
+			</dependency>
+			<!-- aligned with Camunda 7.20 -->
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-context</artifactId>
+				<scope>provided</scope>
+			</dependency>
+			<!-- for autoconfiguration -->
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-autoconfigure</artifactId>
+			</dependency>
+			<!-- Spring Kafka for a simple producer -->
+			<dependency>
+				<groupId>org.springframework.kafka</groupId>
+				<artifactId>spring-kafka</artifactId>
+			</dependency>
+
+			<!-- Confluent libraries for avro schema -->
+			<dependency>
+				<groupId>io.confluent</groupId>
+				<artifactId>common-config</artifactId>
+				<version>7.4.0</version>
+			</dependency>
+
+			<dependency>
+				<groupId>io.confluent</groupId>
+				<artifactId>kafka-avro-serializer</artifactId>
+				<version>${kafka-avro-serializer.version}</version>
+				<exclusions>
+					<exclusion>
+						<groupId>org.apache.kafka</groupId>
+						<artifactId>kafka-clients</artifactId>
+					</exclusion>
+				</exclusions>
+			</dependency>
+
+			<!-- Logback to create the appender programmatically -->
+			<dependency>
+				<groupId>ch.qos.logback</groupId>
+				<artifactId>logback-classic</artifactId>
+			</dependency>
+
+			<!-- Bean Validations -->
+			<dependency>
+				<groupId>jakarta.annotation</groupId>
+				<artifactId>jakarta.annotation-api</artifactId>
+			</dependency>
+
+			<!-- Developer tool -->
+			<dependency>
+				<groupId>org.projectlombok</groupId>
+				<artifactId>lombok</artifactId>
+				<optional>true</optional>
+			</dependency>
+
+			<!-- Test dependencies for SpringBootTest and EmbeddedKafka -->
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-starter-test</artifactId>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.kafka</groupId>
+				<artifactId>spring-kafka-test</artifactId>
+				<scope>test</scope>
+			</dependency>
+		</dependencies>
+
+		<build>
+			<plugins>
+				<!-- Avro schema Bean generator -->
+				<plugin>
+					<groupId>org.apache.avro</groupId>
+					<artifactId>avro-maven-plugin</artifactId>
+					<version>${avro-maven-plugin.version}</version>
+					<executions>
+						<execution>
+							<phase>generate-sources</phase>
+							<goals>
+								<goal>schema</goal>
+							</goals>
+							<configuration>
+								<stringType>String</stringType>
+								<sourceDirectory>${project.basedir}/src/main/resources/</sourceDirectory>
+							</configuration>
+						</execution>
+					</executions>
+				</plugin>
+				<!-- Jar compatible with Camunda 7.20 -->
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-jar-plugin</artifactId>
+					<configuration>
+						<archive>
+							<manifest>
+								<mainClass>org.springframework.boot.loader.PropertiesLauncher</mainClass>
+							</manifest>
+						</archive>
+					</configuration>
+				</plugin>
+				<!-- Unit test -->
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-surefire-plugin</artifactId>
+					<version>3.2.2</version>
+				</plugin>
+			</plugins>
+		</build>
+
+		<!-- Confluent needs a specific repository -->
+		<repositories>
+			<repository>
+				<id>confluent</id>
+				<url>https://packages.confluent.io/maven/</url>
+			</repository>
+		</repositories>
+	</project>
+	```
+
+2) The project will be as follows:
+	* In resources there will be the avro schema of a log record. Following a basic avro schema:
+
+		`logging.avsc`
+		```json
+		{
+			"type": "record",
+			"name": "LogRecord",
+			"namespace": "org.gfs.workshop.camunda.logging.schema",
+			"fields": [
+				{
+					"name": "timestamp",
+					"type": "long"
+				},
+				{
+					"name": "level",
+					"type": "string"
+				},
+				{
+					"name": "loggerName",
+					"type": "string"  
+				},
+				{
+					"name": "message",
+					"type": "string"
+				},
+				{
+					"name": "thread",
+					"type": "string"
+				},
+				{
+					"name": "stackTrace",
+					"type": [
+						"null",
+						"string"
+					]
+				}
+			]
+		}
+		```
+	* Under `resources/META-INF/spring` there will be a file named `org.springframework.boot.autoconfigure.AutoConfiguration.imports`. This file was introduced from SpringBoot 2.7 (previously was `spring.factories`) and it lists the name of configuration files that should be hooked. When SpringBoot starts it scans all jars in path and look for this type of file. When it finds a file in path with this name it call the configuration class to initialize it. The Configuration Class could at that point to set up the component scan directory in order to create in spring context all its beans. So the content of the **.imports* file will be in our case:
+
+		`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+		```
+		org/gfs/workshop/camunda/logging/KafkaLoggingAutoConfiguration
+		``` 
+
+	* The autoconfiguration class will be as follows:
+
+		`KafkaLoggingAutoConfiguration.java`
+		```java
+		@AutoConfiguration
+		@AllArgsConstructor
+		@Slf4j
+		@ComponentScan
+		public class KafkaLoggingAutoConfiguration {
+			private final KafkaTemplate<String, LogRecord> kafkaTemplate;
+
+			@PostConstruct
+			public void startKafkaAppender() {
+				log.info("**** KAFKA LOGGER APPENDER INITIALIZATION ****");
+				Logger rootLogger = (Logger) LoggerFactory.getILoggerFactory().getLogger(Logger.ROOT_LOGGER_NAME);
+				Appender<ILoggingEvent> kafkaAppender = new KafkaLogAppender(kafkaTemplate, rootLogger);
+				kafkaAppender.start();
+
+				rootLogger.addAppender(kafkaAppender);
+
+				Map<String, Appender<ILoggingEvent>> appendersMap = new HashMap<>();
+				rootLogger.getLoggerContext().getLoggerList()
+						.forEach(logger ->
+								logger.iteratorForAppenders()
+										.forEachRemaining(appender -> appendersMap.put(appender.getName(), appender)));
+				log.info("Appenders: {}", appendersMap.entrySet().stream()
+						.map(appender -> "\n" + appender.getKey() + " --> " + appender.getValue().isStarted())
+						.collect(Collectors.joining(",")));
+				log.info("KafkaAppender configuration \n{}\n{}",
+						kafkaTemplate.getDefaultTopic(),
+						kafkaTemplate.getProducerFactory().getConfigurationProperties());
+			}
+
+		}
+		```
+
+	* The log appender will receive as input the Kafka template initialized by Spring Kafka and will write the schema and will publish the message. To avoid a starvation or conflicts with the current thread the publishing will be performed by a thread executor:
+
+		`KafkaLogAppender.java`
+		```java
+		@Slf4j
+		public class KafkaLogAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
+			private final KafkaTemplate<String, LogRecord> kafkaTemplate;
+
+			public KafkaLogAppender(KafkaTemplate<String, LogRecord> template, Logger logger) {
+				kafkaTemplate = template;
+				setName(logger.getName());
+				setContext((LoggerContext) LoggerFactory.getILoggerFactory());
+			}
+
+			@Override
+			protected void append(ILoggingEvent iLoggingEvent) {
+				LogRecord logRecord = LogRecord.newBuilder()
+						.setLevel(iLoggingEvent.getLevel().toString())
+						.setLoggerName(iLoggingEvent.getLoggerName())
+						.setThread(iLoggingEvent.getThreadName())
+						.setTimestamp(iLoggingEvent.getTimeStamp())
+						.setMessage(iLoggingEvent.getMessage())
+						.setStackTrace(Arrays.toString(iLoggingEvent.getCallerData()))
+						.build();
+				log.trace("Appending message kafka on topic {}:\n {}", kafkaTemplate.getDefaultTopic(), logRecord);
+				Executors.newSingleThreadExecutor().submit(() -> {
+					kafkaTemplate.send(kafkaTemplate.getDefaultTopic(), 0, null, logRecord)
+							.whenComplete((result, ex) -> {
+								if (ex == null) {
+									log.trace("Sent message=[" + logRecord +
+											"] with offset=[" + result.getRecordMetadata().offset() + "]");
+								} else {
+									log.trace("Unable to send message=[" +
+											logRecord + "] due to : " + ex.getMessage());
+								}
+							});
+				});
+			}
+		}
+		```
+
+	* Since the application.properties of Camunda doesn't have anything of Kafka (Camunda 7 doesn't support Kafka at all) we can't expect to initialize spring kafka with that properties. So we have to define a custom file that doesn't exist in other jars with the configuration:
+
+		`kafka-appender.yaml`
+		```yaml
+		spring:
+			kafka:
+				bootstrap-servers: localhost:9092
+				properties:
+					schema:
+						registry:
+							url: http://localhost:8081
+							ssl:
+								keystore:
+									location: %path of your certificate%\Step 14 - Logging\KafkaLoggerAppender\src\main\resources\mycert.jks
+									password: changeit
+								truststore:
+									location: %path of your certificate%\Step 14 - Logging\KafkaLoggerAppender\src\main\resources\mycert.jks
+									password: changeit
+								key:
+									password: changeit
+					auto.register.schema: false
+				producer:
+					key-serializer: org.apache.kafka.common.serialization.StringSerializer
+					value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+				template:
+					default-topic: 	workshop_camunda_logging_topic-%your-name%
+		```
+	* To upload these properties in KafkaProperties (the Spring properties bean for Kafka) you can just extend them as follows:
+
+		`AppenderKafkaProperties`
+		```java
+		@Configuration
+		@ConfigurationProperties(prefix = "spring.kafka")
+		@PropertySource(value = "classpath:kafka-appender.yaml", factory = YamlPropertySourceFactory.class)
+		@Primary
+		@Data
+		public class AppenderKafkaProperties  {}
+		```
+
+	* The property class defines as origin the properties spring.kafka loaded from `kafka-appender.yaml`. The problem now is that `@PropertySource` annotation doesn't support natively YAML files, so you have to specify a custom factory that will be as follows:
+
+		`YamlPropertySourceFactory`
+		```java
+		public class YamlPropertySourceFactory implements PropertySourceFactory {
+			@Override
+			public PropertySource<?> createPropertySource(String name, @NonNull EncodedResource resource) throws IOException {
+				return new YamlPropertySourceLoader()
+						.load(resource.getResource().getFilename(),
+								resource.getResource()).get(0);
+			}
+		}
+		```
+
+		In this case the spring YamlPropertySourceLoader was used.
+
+	* Let's define a basic `logback-spring.xml` configuration file so that we are sure that logback will be initialized:
+
+		```xml
+		<?xml version="1.0" encoding="UTF-8"?>
+		<configuration>
+			<include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+			<include resource="org/springframework/boot/logging/logback/console-appender.xml" />
+			<root level="INFO">
+				<appender-ref ref="CONSOLE" />
+			</root>
+			<logger name="org.gfs" level="INFO"/>
+			<logger name="org.apache.kafka" level="INFO"/>
+		</configuration>
+		```
+	
+	* Finally create a test class to check that everything works as expected:
+
+		`AppTest.java`
+		```java
+		@SpringBootTest(classes = {
+			KafkaLoggingAutoConfiguration.class,
+			KafkaAutoConfiguration.class
+		})
+		@EmbeddedKafka(partitions = 1)
+		@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+		@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+		public class AppTest {
+			@Autowired
+			private KafkaProperties kafkaProperties;
+			@Autowired
+			private KafkaTemplate<String, LogRecord> kafkaTemplate;
+
+			@Test
+			@Order(1)
+			public void testContext() {
+			}
+
+			@Test
+			@Order(2)
+			public void testProperties() {
+				assert kafkaProperties != null;
+			}
+
+			@Test
+			@Order(3)
+			public void checkKafkaProducer() {
+				Map<String, Object> consumerConfig = kafkaProperties.buildConsumerProperties(null);
+				consumerConfig.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+						kafkaProperties.getProperties().get(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG));
+				consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "component-test");
+				consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+				KafkaConsumer<String, LogRecord> consumer = new KafkaConsumer<>(consumerConfig);
+				consumer.subscribe(Collections.singleton(kafkaTemplate.getDefaultTopic()));
+				assert KafkaTestUtils.getRecords(
+						consumer) != null;
+			}
+
+		}
+		```
+
+		Add in `src/test/resources` folder the test configuration:
+
+		`kafka-appender.yaml`
+		```yaml
+		spring:
+			kafka:
+				bootstrap-servers: localhost:9092
+			properties:
+				schema:
+					registry:
+					url: mock://testurl
+				auto.register.schema: false
+			producer:
+				key-serializer: org.apache.kafka.common.serialization.StringSerializer
+				value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+			template:
+				default-topic: workshop_camunda_logging_topic
+		```
+
+	Keep in mind that your library isn't executable on its own, you can just test it wih unit test. Package it.
+
+3) Run the `myuserlib.bat` batch file in the root folder of the repository of this step exercise. Copy then the folder myuserlib in `camunda-bpm-runtime` folder in subfolder `configuration\userlib\my`. Copy your compiled library in the same folder.
+
+4) Go to kafka-tool-monitor folder and run `monitor.bat`. In localhost:8085 on your browser you should see the akhq page. Check in path that you are pointing to dev environment else select the database icon on the left and select *dev*. Press **Create topic** button and create a topic with the name you defined in property file: `workshop_camunda_logging_topic-%your-name%`
+
+5) Go to 3-gear icon, create a subject with the name of your topic and the suffix `-value`. Copy and paste the avro schema.
+
+6) Finally run camunda as usual. Your topic should be populated successfully with camunda logs. At this point we don't implement the integration with ELK, but you could do it.
 
