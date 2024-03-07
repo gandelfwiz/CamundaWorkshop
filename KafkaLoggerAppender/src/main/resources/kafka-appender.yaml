@@ -1,0 +1,22 @@
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    properties:
+      schema:
+        registry:
+          url: http://localhost:8081
+          ssl:
+            keystore:
+              location: \src\main\resources\mycert.jks
+              password: changeit
+            truststore:
+              location: \src\main\resources\mycert.jks
+              password: changeit
+            key:
+              password: changeit
+      auto.register.schema: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+    template:
+      default-topic: workshop_camunda_logging_topic

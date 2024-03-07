@@ -1,0 +1,34 @@
+{
+  "type": "record",
+  "name": "LogRecord",
+  "namespace": "org.gfs.workshop.camunda.logging.schema",
+  "fields": [
+    {
+      "name": "timestamp",
+      "type": "long"
+    },
+    {
+      "name": "level",
+      "type": "string"
+    },
+    {
+      "name": "loggerName",
+      "type": "string"
+    },
+    {
+      "name": "message",
+      "type": "string"
+    },
+    {
+      "name": "thread",
+      "type": "string"
+    },
+    {
+      "name": "stackTrace",
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  ]
+}
