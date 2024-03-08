@@ -30,6 +30,7 @@ The following technologies are used inside the project:
 - Hazelcast 5.3.6
 - Nginx 1.25.4
 - Hashicorp Consul 1.17.3
+- Confluent Community 7.6.0
 
 ---
 ## <span style="color:darkorange">Prerequisites</span>
