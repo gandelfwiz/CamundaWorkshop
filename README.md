@@ -65,6 +65,8 @@ Set up **JAVA_HOME** to the jdk 17 you just downloaded.
 12. [DMN and custom endpoints](#step12)
 13. [Working with external business data](#step13)
 14. [Externalize logs in kafka for connection to ELK](#step14)
+15. [Camunda Embedded](#step15)
+16. [Interaction with Spring Beans](#step16)
 
 &nbsp;
 
@@ -3018,4 +3020,142 @@ When you select PASSWORD with each of them the password will work as expected.
 5) Go to 3-gear icon, create a subject with the name of your topic and the suffix `-value`. Copy and paste the avro schema.
 
 6) Finally run camunda as usual. Your topic should be populated successfully with camunda logs. At this point we don't implement the integration with ELK, but you could do it.
+
+&nbsp;
+
+<div id='step15'/>
+
+### **Step 15: Camunda embedded**
+
+&nbsp;
+
+1. Let's start now a new project and let's call it CamundaEmbedded. Start creating a new project from intellij. Name it `CamundaEmbedded`
+
+	![Step 15 Create new project](images/01-Create_Project.png)
+
+2. Select `manage catalogs...` and set up the camunda archetypes repository:
+
+	![Step 15 Camunda archetypes](images/02-ManageCatalogs.png)
+
+3. Select `Camunda` from the catalog, the archetype `org.camunda.bpm.archetype:camunda-archetype-spring-boot`, version `7.20.0`. Keep everything as proposed an create it.
+
+4. Once intellij has created the project for you, give it the name try to compile and run it. In the example the `pom.xml` is set as follows:
+
+	```xml
+	<groupId>org.gfs.workshop.camunda.embedded</groupId>
+	<artifactId>CamundaEmbedded</artifactId>
+	<version>1.0-SNAPSHOT</version>
+	```
+
+5. Run `mvn clean package` and build the solution. Run `java -jar target\CamundaEmbedded.jar`. Go to the browser at `localhost:8080` and Camunda is ready to use like in exercise 1.
+
+6. Stop the engine. Copy under `resources\processes` subfolder (to create) the processes we have created until now:
+	* Authorization.bpmn
+	* AuthorizationTypeDecision.dmn
+	* Delivery.bpmn
+	* Dispensation.bpmn
+	* Settlement.bpmn
+
+7. Change `application.yaml` properties file adding under camunda.bpm the following property: `deployment-resource-pattern: classpath*:processes/*.*`
+
+8. By default Camunda embedded doesn't support connector and groovy. You have to add the following dependencies to the pom.xml
+
+	```xml
+	<dependency>
+      <groupId>org.camunda.bpm</groupId>
+      <artifactId>camunda-engine-plugin-connect</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.camunda.connect</groupId>
+      <artifactId>camunda-connect-http-client</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.groovy</groupId>
+      <artifactId>groovy-all</artifactId>
+      <version>4.0.19</version>
+    </dependency>
+	<dependency>
+      <groupId>org.graalvm.js</groupId>
+      <artifactId>js</artifactId>
+      <version>23.0.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.graalvm.js</groupId>
+      <artifactId>js-scriptengine</artifactId>
+      <version>23.1.2</version>
+    </dependency>
+	```
+
+8. Repackage and rerun. Accessing to the **cockpit** with user *demo* and password *demo* you should see all the processes automatically deployed. Try to run all configurations done until now, you should have the same behavior of the pre-built camunda release.
+
+&nbsp;
+
+<div id='step16'/>
+
+### **Step 16: Interaction with Spring Beans**
+
+&nbsp;
+
+1. Open the *CamundaEmbedded* project. Copy from sidecar project the entities: `BusinessDataEntity`, `BusinessDataEntityValue`, `EnrollmentDataEntity`, `PayloadData`, `PayloadDataValue`. 
+
+2. Now let's create the same groovy script as a Spring Bean. Create the class `GetBusinessData` and extends the JavaDelegate interface of Camunda:
+
+	```java
+	@Component
+	@RequiredArgsConstructor
+	@Slf4j
+	public class GetBusinessData implements JavaDelegate {
+		private final RestTemplate restTemplate;
+
+		@Override
+		public void execute(DelegateExecution delegateExecution) throws Exception {
+			log.info("Executing java delegate task getBusinessData");
+			try {
+				BusinessDataEntityValue businessDataEntityValue =
+						restTemplate.getForObject("http://localhost:8900/business-data/payload/" +
+								delegateExecution.getVariable("businessUuid"), BusinessDataEntityValue.class
+						);
+
+				assert businessDataEntityValue != null;
+				businessDataEntityValue.getDataList()
+						.forEach(entry -> delegateExecution.setVariableLocal(entry.getKey(), entry.getValue().getValue()));
+				delegateExecution.setVariableLocal("AuthorizationTypeRequested", delegateExecution.getVariableLocal("authorizationType"));
+
+				EnrollmentDataEntity enrollmentDataEntity =
+						restTemplate.getForObject("http://localhost:8900/business-data/enrollment/" +
+										delegateExecution.getVariableLocal("customerId"),
+								EnrollmentDataEntity.class);
+
+				if (Objects.nonNull(enrollmentDataEntity)) {
+					delegateExecution.setVariableLocal("BiometricEnrolled", enrollmentDataEntity.getEnrolledFlg());
+				} else {
+					delegateExecution.setVariableLocal("BiometricEnrolled", false);
+				}
+			} catch (Exception e) {
+				throw new org.camunda.bpm.engine.ProcessEngineException("Errore durante la chiamata REST: ${e.message}");
+			}
+		}
+	}
+	```
+
+3. Create the configuration class `AppConfig.java` to create the instance of RestTemplate:
+
+	```java
+	@Configuration
+	public class AppConfig {
+		
+		@Bean
+		public RestTemplate getRestTemplate() {
+			return new RestTemplate();
+		}
+	}
+	```
+
+4. Change the process `Authorization.bpmn`. Select the decision task `Select the authorization type` and in *Execution Listeners* change the start listener from *script* to *Delegate expression* and set the value to `${getBusinessData}`. The expression is the name of task class we have created. Spring create the bean with the name of the class with the first letter as lower case. Camunda will get from Spring context the bean and will use the external task in place of the groovy script.
+
+5. Build and try again the page. In CamundaEmbedded log you should read: 
+
+	`Executing java delegate task getBusinessData`
+
+	Your integration is done correctly!
 
