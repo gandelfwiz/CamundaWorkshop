@@ -37,7 +37,7 @@ The following technologies are used inside the project:
 
 The project is developed under Windows 11.
 
-All the project **doesn't require administration rights** on your machine. All software involved are **portable**.
+All the project **doesn't require administration rights** on your machine. All softwares involved are **portable**.
 
 1) **Download** camunda standalone: https://downloads.camunda.cloud/release/camunda-bpm/run/7.20/camunda-bpm-run-7.20.0.zip
 
@@ -113,9 +113,9 @@ All the project **doesn't require administration rights** on your machine. All s
 
 &nbsp;
 
-This repository contains a documented training course for Camunda 7.
+This repository contains a documented training course for Camunda 7.20.
 
-Starting from basic flows and basic learning of Camunda, the course add elements simulating a distributed architecture where each component has to be integrated with others following specific patterns.
+Starting from basic flows and basic learning of Camunda, the course add progressively elements simulating a distributed architecture where each component has to be integrated with each other following specific patterns.
 
 The final result is depicted in this picture:
 
@@ -123,7 +123,7 @@ The final result is depicted in this picture:
 
 Everything will run in your localhost without any administration right required. The node of the pod is conceptual, since Docker can't be executed in an environment without administration rights. Port interfaces are important to understand the need to have a service discovery and a gateway. The Single Page Application with the web component will externalize the form from Camunda moving it in a distributed environment.
 
-This architecture approach is just a starting point. To use Camunda in agnostic manner the ideal would be to externalize also the task implementation with dedicated microservices or with an orchestration layer. Hazelcast is used inside the pod to keep aligned the data through a cache, but the cache should be out of the POD and should be persistent in a distributed environment and it should be accessible also from the orchestration layer that performs the task actions. Other changes could be done, for example Camunda should call the Outgoing sidecar through gRPC to be more efficient. And Sidecar could be written in a most performant framework or language than spring boot and java. Decoupling input/output layer and keeping Camunda pre-built as the state machine engine seems to be the best solution.
+This architecture approach is just a starting point. To use Camunda in agnostic manner as suggested by the architectural approach the ideal would be to externalize also the task implementation with dedicated microservices or with an orchestration layer. Hazelcast is used inside the pod to keep aligned the data through a cache, but the cache should be out of the POD and should be persistent in a distributed environment and it should be accessible also from the orchestration layer that performs the task actions. Other changes could be done, for example Camunda could call the Outgoing sidecar through gRPC to be more efficient. And Sidecar could be written in a most performant framework or language than spring boot and java. Decoupling input/output layer and keeping Camunda pre-built as the state machine engine seems to be the best solution.
 
 The exercise 16 _Externalize logs in kafka for connection to ELK_ will be limited just to the publishing of logs in Kafka. The connection of Kafka through _logstash_ to ELK isn't describe inside the exercise.
 
