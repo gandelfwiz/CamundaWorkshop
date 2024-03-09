@@ -60,7 +60,7 @@
                 "feedbackType": "MESSAGE"
         },
 	"data": {
-		"author": "gandelfwiz"
+		"author": "CA34ED"
 	}
 }
 
@@ -262,28 +262,7 @@ JSON.stringify(payload);</camunda:script>
     </bpmn:subProcess>
     <bpmn:businessRuleTask id="SelectAuthorizationType" name="Select the authorization type" camunda:resultVariable="authorizationTypeResult" camunda:decisionRef="AuthorizationTypeDecision" camunda:mapDecisionResult="singleEntry">
       <bpmn:extensionElements>
-        <camunda:executionListener event="start">
-          <camunda:script scriptFormat="groovy">try {
-    def response = new URL('http://localhost:8900/business-data/payload/' + businessUuid).getText()
-
-    def responseJson = new groovy.json.JsonSlurper().parseText(response)
-    responseJson.data.each { variable -&gt;
-        execution.setVariableLocal(variable.key, variable.value)
-    }
-    execution.setVariableLocal("AuthorizationTypeRequested", execution.getVariableLocal("authorizationType"))
-    def responseEnrollment = new URL('http://localhost:8900/business-data/enrollment/' + execution.getVariableLocal("customerId")).getText()
-    if (responseEnrollment != null &amp;&amp; !responseEnrollment.isEmpty()) {
-        def responseEnrollmentJson = new groovy.json.JsonSlurper().parseText(responseEnrollment)
-         execution.setVariableLocal("BiometricEnrolled",responseEnrollmentJson.enrolledFlg)
-    } else {
-        // default
-        println "Response is null, biometric enrolled is false by default"
-        execution.setVariableLocal("BiometricEnrolled",false)
-    }
-} catch (Exception e) {
-    throw new org.camunda.bpm.engine.ProcessEngineException("Errore durante la chiamata REST: ${e.message}")
-}</camunda:script>
-        </camunda:executionListener>
+        <camunda:executionListener delegateExpression="${getBusinessData}" event="start" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_14c2ir8</bpmn:incoming>
       <bpmn:outgoing>Flow_02hv2i9</bpmn:outgoing>
