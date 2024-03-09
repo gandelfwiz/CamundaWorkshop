@@ -20,7 +20,7 @@ The proposed approach of this project is as follows:
 - Finally create a Camunda embedded solution
 
 ---
-## <span style="color:darkorange">Proposed Architecture adoption</span>
+## <span style="color:darkorange">Proposed Technologies adoption</span>
 
 The following technologies are used inside the project:
 - SpringBoot 3.1
